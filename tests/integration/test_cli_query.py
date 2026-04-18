@@ -28,7 +28,7 @@ def _seed(db_path: Path) -> None:
             title="建國南路三房",
             url="https://sale.591.com.tw/home/house/detail/2/match-1.html",
             price=Price(33_000_000, "TWD"),
-            address=Address(city="台北市", district="內湖區", raw="建國南路123號"),
+            address=Address(city="台北市", district="大安區", raw="建國南路123號"),
             attributes={"shape": "電梯大樓"},
             area_ping=32.5,
             unit_price_per_ping=101.5,
@@ -39,10 +39,10 @@ def _seed(db_path: Path) -> None:
         ),
         Listing(
             id=ListingId("591", "match-2"),
-            title="內湖路老公寓",
+            title="復興南路老公寓",
             url="https://sale.591.com.tw/home/house/detail/2/match-2.html",
             price=Price(28_000_000, "TWD"),
-            address=Address(city="台北市", district="內湖區", raw="內湖路二段50號"),
+            address=Address(city="台北市", district="大安區", raw="復興南路二段50號"),
             attributes={"shape": "公寓"},
             area_ping=28.0,
             unit_price_per_ping=100.0,
@@ -57,7 +57,7 @@ def _seed(db_path: Path) -> None:
             title="豪宅",
             url="https://sale.591.com.tw/home/house/detail/2/too-expensive.html",
             price=Price(50_000_000, "TWD"),
-            address=Address(city="台北市", district="內湖區", raw="瑞光路100號"),
+            address=Address(city="台北市", district="大安區", raw="瑞光路100號"),
             attributes={"shape": "電梯大樓"},
             area_ping=80.0,
             house_age_years=5,
@@ -68,7 +68,7 @@ def _seed(db_path: Path) -> None:
             title="老老公寓",
             url="https://sale.591.com.tw/home/house/detail/2/too-old.html",
             price=Price(20_000_000, "TWD"),
-            address=Address(city="台北市", district="內湖區", raw="行善路1號"),
+            address=Address(city="台北市", district="大安區", raw="行善路1號"),
             attributes={"shape": "公寓"},
             area_ping=25.0,
             house_age_years=45,
@@ -87,10 +87,10 @@ def _seed(db_path: Path) -> None:
         # Wrong shape (透天厝).
         Listing(
             id=ListingId("591", "wrong-shape"),
-            title="內湖透天",
+            title="大安透天",
             url="https://sale.591.com.tw/home/house/detail/2/wrong-shape.html",
             price=Price(34_000_000, "TWD"),
-            address=Address(city="台北市", district="內湖區", raw="文德路200號"),
+            address=Address(city="台北市", district="大安區", raw="文德路200號"),
             attributes={"shape": "透天厝"},
             area_ping=40.0,
             house_age_years=20,
@@ -112,7 +112,7 @@ def test_query_filters_by_district_shape_price_age(tmp_path: Path) -> None:
             "--db",
             str(db),
             "--section-name",
-            "內湖區",
+            "大安區",
             "--shape-name",
             "公寓",
             "--shape-name",
@@ -146,9 +146,9 @@ def test_query_address_contains_filter(tmp_path: Path) -> None:
             "--db",
             str(db),
             "--section-name",
-            "內湖區",
+            "大安區",
             "--address-contains",
-            "大安",
+            "建國",
         ],
     )
 
@@ -178,7 +178,7 @@ def test_query_filters_by_room_range(tmp_path: Path) -> None:
             "--db",
             str(db),
             "--section-name",
-            "內湖區",
+            "大安區",
             "--min-rooms",
             "2",
             "--max-rooms",
@@ -207,7 +207,7 @@ def test_query_no_matches_prints_message(tmp_path: Path) -> None:
             "--db",
             str(db),
             "--section-name",
-            "大安區",  # no seeded data there
+            "中正區",  # no seeded data there
         ],
     )
     assert result.exit_code == 0

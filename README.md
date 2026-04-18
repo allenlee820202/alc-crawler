@@ -35,20 +35,20 @@ uv run alc-crawler regions
 You almost always want one DB file per crawl topic (e.g. `data/daan.sqlite`,
 `data/xinyi.sqlite`). The query CLI never touches the network.
 
-### Example: find houses near 大安國中, ≤4000萬, ≤32年, 2-3房, ≥30坪
+### Example: find houses near 大安國中, ≤4000萬, ≤25年, 2-3房, ≥25坪
 
 ```bash
-# 1) Crawl 內湖區 公寓 + 電梯大樓 (10 pages ≈ 300 listings).
+# 1) Crawl 大安區 公寓 + 電梯大樓 (10 pages ≈ 300 listings).
 #    --insecure is currently REQUIRED for 591 (TLS quirk, see below).
 uv run alc-crawler crawl 591 \
-    --region taipei --section 10 --shape 1,2 \
+    --region taipei --section 5 --shape 1,2 \
     --max-pages 10 --insecure \
     --db data/daan.sqlite
 # -> pages=10 fetched=310 persisted=310
 
-# 2) Query with all the user's hard constraints.
+# 2) Query with hard constraints.
 uv run alc-crawler query --db data/daan.sqlite \
-    --section-name 內湖區 \
+    --section-name 大安區 \
     --shape-name 公寓 --shape-name 電梯大樓 \
     --max-price-wan 4000 --max-age 25 \
     --min-rooms 2 --max-rooms 3 --min-area 25 \
@@ -56,7 +56,7 @@ uv run alc-crawler query --db data/daan.sqlite \
 
 # 3) Narrow further by school name appearing in the agent's title.
 uv run alc-crawler query --db data/daan.sqlite \
-    --section-name 內湖區 --max-price-wan 4000 \
+    --section-name 大安區 --max-price-wan 4000 \
     --title-contains 大安
 ```
 
@@ -165,7 +165,7 @@ within that group.
 | `--min-rooms` / `--max-rooms` | int | Number of 房 parsed from `room_layout`. Excludes rows whose layout is non-standard (e.g. `開放式格局`). |
 | `--address-contains` | str | Substring on raw address. |
 | `--community-contains` | str | Substring on community name. |
-| `--title-contains` | str | Substring on agent's listing title. Useful for school keywords (e.g. `大安`, `大安`). |
+| `--title-contains` | str | Substring on agent's listing title. Useful for school or landmark keywords. |
 | `--order-by` | enum | `price_amount` (default), `unit_price_per_ping`, `area_ping`, `house_age_years`, `posted_at`. |
 | `--desc` | flag | Reverse sort order. |
 | `--limit` | int | Max rows printed. Default `50`. |
@@ -191,9 +191,9 @@ The DB is plain SQLite — query directly when the CLI is too restrictive:
 sqlite3 data/daan.sqlite \
   "SELECT external_id, price_amount/10000, room_layout, community_name, url
    FROM listings
-   WHERE address_district='內湖區'
+   WHERE address_district='大安區'
      AND price_amount <= 40000000
-     AND house_age_years <= 32
+     AND house_age_years <= 25
      AND room_layout GLOB '[2-3]房*'
    ORDER BY price_amount LIMIT 20;"
 ```

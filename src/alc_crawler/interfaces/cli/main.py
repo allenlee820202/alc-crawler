@@ -24,9 +24,9 @@ app = typer.Typer(
     help=(
         "Self-hosted crawler for Taiwan house-selling sites.\n\n"
         "Two-step workflow:\n"
-        "  1) `alc-crawler crawl 591 --region taipei --section 10 --shape 1,2 "
+        "  1) `alc-crawler crawl 591 --region taipei --section 5 --shape 1,2 "
         "--max-pages 10 --insecure --db data/daan.sqlite`\n"
-        "  2) `alc-crawler query --db data/daan.sqlite --section-name 內湖區 "
+        "  2) `alc-crawler query --db data/daan.sqlite --section-name 大安區 "
         "--max-price-wan 4000 --max-age 25 --min-rooms 2 --max-rooms 3`\n\n"
         "Run `alc-crawler crawl --help` and `alc-crawler query --help` for the "
         "full ID tables and filter list."
@@ -104,8 +104,8 @@ def crawl(
 
     Examples:
 
-      # 內湖區, 公寓+電梯大樓, first 10 pages -> ~300 listings
-      alc-crawler crawl 591 --region taipei --section 10 --shape 1,2 \\
+      # 大安區, 公寓+電梯大樓, first 10 pages -> ~300 listings
+      alc-crawler crawl 591 --region taipei --section 5 --shape 1,2 \\
           --max-pages 10 --insecure --db data/daan.sqlite
 
       # Whole 台北市 (no --section), only 透天厝, deeper crawl
@@ -151,7 +151,7 @@ def query(
     section_name: list[str] = typer.Option(
         [],
         "--section-name",
-        help="District name (e.g. 內湖區). Repeat to match any of several.",
+        help="District name (e.g. 大安區). Repeat to match any of several.",
     ),
     shape_name: list[str] = typer.Option(
         [],
@@ -224,9 +224,9 @@ def query(
 
     Examples:
 
-      # Full constraint set: 內湖區 公寓/電梯大樓, ≤4000萬, ≤32年, 2-3房, ≥30坪
+      # Full constraint set: 大安區 公寓/電梯大樓, ≤4000萬, ≤25年, 2-3房, ≥25坪
       alc-crawler query --db data/daan.sqlite \\
-          --section-name 內湖區 \\
+          --section-name 大安區 \\
           --shape-name 公寓 --shape-name 電梯大樓 \\
           --max-price-wan 4000 --max-age 25 \\
           --min-rooms 2 --max-rooms 3 --min-area 25
