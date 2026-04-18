@@ -34,6 +34,20 @@ def test_regions_shows_taipei_section_table() -> None:
     assert "7" in result.output
 
 
+def test_regions_shows_new_taipei_section_table() -> None:
+    runner = CliRunner()
+    result = runner.invoke(app, ["regions"])
+
+    assert result.exit_code == 0, result.output
+    # A handful of well-known 新北 districts and their probed ids.
+    assert "板橋" in result.output  # id 26
+    assert "26" in result.output
+    assert "新店" in result.output  # id 34
+    assert "34" in result.output
+    assert "淡水" in result.output  # id 50
+    assert "50" in result.output
+
+
 def test_regions_shows_shape_table() -> None:
     runner = CliRunner()
     result = runner.invoke(app, ["regions"])

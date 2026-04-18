@@ -46,6 +46,40 @@ TAIPEI_SECTION_IDS: dict[int, str] = {
     12: "文山區",
 }
 
+# Section ids for 新北市 (region=new-taipei). Discovered by probing 591's
+# BFF. 27 of 新北市's 29 administrative districts have confirmed ids;
+# 三芝/石門 may exist but currently return zero listings, so they are
+# omitted to avoid asserting unverified ids.
+NEW_TAIPEI_SECTION_IDS: dict[int, str] = {
+    20: "萬里區",
+    21: "金山區",
+    26: "板橋區",
+    27: "汐止區",
+    28: "深坑區",
+    29: "石碇區",
+    30: "瑞芳區",
+    31: "平溪區",
+    32: "雙溪區",
+    33: "貢寮區",
+    34: "新店區",
+    35: "坪林區",
+    36: "烏來區",
+    37: "永和區",
+    38: "中和區",
+    39: "土城區",
+    40: "三峽區",
+    41: "樹林區",
+    42: "鶯歌區",
+    43: "三重區",
+    44: "新莊區",
+    45: "泰山區",
+    46: "林口區",
+    47: "蘆洲區",
+    48: "五股區",
+    49: "八里區",
+    50: "淡水區",
+}
+
 # Shape (建物型態) ids accepted by 591's BFF.
 SHAPE_IDS: dict[int, str] = {
     1: "公寓",

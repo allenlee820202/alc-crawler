@@ -9,6 +9,7 @@ import typer
 
 from alc_crawler.adapters.sites.site_591.crawl_service import Site591CrawlService
 from alc_crawler.adapters.sites.site_591.search_urls import (
+    NEW_TAIPEI_SECTION_IDS,
     REGION_IDS,
     SHAPE_IDS,
     TAIPEI_SECTION_IDS,
@@ -370,7 +371,13 @@ def regions() -> None:
     typer.echo(f"  {'id':>3}  區")
     for sid, name in sorted(TAIPEI_SECTION_IDS.items()):
         typer.echo(f"  {sid:>3}  {name}")
-    typer.echo("  (Other regions have their own section id spaces; inspect 591's UI.)")
+    typer.echo("")
+    typer.echo("Section ids for 新北市 (--section, when --region new-taipei):")
+    typer.echo(f"  {'id':>3}  區")
+    for sid, name in sorted(NEW_TAIPEI_SECTION_IDS.items()):
+        typer.echo(f"  {sid:>3}  {name}")
+    typer.echo("  (三芝/石門 may exist but currently return zero listings.)")
+    typer.echo("  (Other regions: inspect 591's UI; ids not yet probed.)")
     typer.echo("")
     typer.echo("Shape ids (--shape, comma-separated for OR):")
     typer.echo(f"  {'id':>3}  類型")

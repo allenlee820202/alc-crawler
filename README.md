@@ -95,7 +95,28 @@ less than `fetched` only on parse errors.
 | 6 | 萬華 | 12 | 文山 |
 | 7 | 信義 | | |
 
-For other cities, inspect 591's UI — every region has its own section ids.
+### Section ids (新北市, region=`new-taipei`)
+
+| id | 區 | id | 區 | id | 區 |
+|---:|---|---:|---|---:|---|
+| 20 | 萬里 | 30 | 瑞芳 | 40 | 三峽 |
+| 21 | 金山 | 31 | 平溪 | 41 | 樹林 |
+| 26 | 板橋 | 32 | 雙溪 | 42 | 鶯歌 |
+| 27 | 汐止 | 33 | 貢寮 | 43 | 三重 |
+| 28 | 深坑 | 34 | 新店 | 44 | 新莊 |
+| 29 | 石碇 | 35 | 坪林 | 45 | 泰山 |
+|    |     | 36 | 烏來 | 46 | 林口 |
+|    |     | 37 | 永和 | 47 | 蘆洲 |
+|    |     | 38 | 中和 | 48 | 五股 |
+|    |     | 39 | 土城 | 49 | 八里 |
+|    |     |    |     | 50 | 淡水 |
+
+> 三芝 / 石門 may exist as ids but currently return zero listings.
+
+For other cities (`taoyuan`, `taichung`, `kaohsiung`), section ids are not
+yet probed — inspect 591's UI or run a probe.
+
+Run `alc-crawler regions` for the same tables on the CLI.
 
 ### Shape ids
 
