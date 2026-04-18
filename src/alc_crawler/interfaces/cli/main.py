@@ -125,6 +125,16 @@ def query(
     min_area: float | None = typer.Option(
         None, "--min-area", help="Minimum total area in 坪."
     ),
+    min_rooms: int | None = typer.Option(
+        None,
+        "--min-rooms",
+        help="Minimum number of 房 (parsed from room_layout, e.g. '3房2廳').",
+    ),
+    max_rooms: int | None = typer.Option(
+        None,
+        "--max-rooms",
+        help="Maximum number of 房 (parsed from room_layout).",
+    ),
     address_contains: str | None = typer.Option(
         None,
         "--address-contains",
@@ -198,6 +208,17 @@ def query(
     if min_area is not None:
         where.append("(area_ping IS NOT NULL AND area_ping >= ?)")
         params.append(min_area)
+    if min_rooms is not None or max_rooms is not None:
+        # room_layout looks like "3房2廳2衛"; require single-digit 房 prefix.
+        where.append(
+            "(room_layout IS NOT NULL AND room_layout GLOB '[0-9]房*')"
+        )
+        if min_rooms is not None:
+            where.append("CAST(SUBSTR(room_layout, 1, 1) AS INTEGER) >= ?")
+            params.append(min_rooms)
+        if max_rooms is not None:
+            where.append("CAST(SUBSTR(room_layout, 1, 1) AS INTEGER) <= ?")
+            params.append(max_rooms)
     if address_contains:
         where.append("address_raw LIKE ?")
         params.append(f"%{address_contains}%")

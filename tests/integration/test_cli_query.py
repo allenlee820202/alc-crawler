@@ -166,6 +166,36 @@ def test_query_missing_db_errors_helpfully(tmp_path: Path) -> None:
     assert "not found" in result.output.lower()
 
 
+def test_query_filters_by_room_range(tmp_path: Path) -> None:
+    db = tmp_path / "q.sqlite"
+    _seed(db)
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "query",
+            "--db",
+            str(db),
+            "--section-name",
+            "內湖區",
+            "--min-rooms",
+            "2",
+            "--max-rooms",
+            "3",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    # match-1 (3房) and match-2 (2房) qualify; too-expensive/too-old/wrong-shape
+    # have no room_layout seeded so should be excluded by the room filter.
+    assert "match-1" in result.output
+    assert "match-2" in result.output
+    assert "too-expensive" not in result.output
+    assert "too-old" not in result.output
+    assert "wrong-shape" not in result.output
+
+
 def test_query_no_matches_prints_message(tmp_path: Path) -> None:
     db = tmp_path / "q.sqlite"
     _seed(db)
