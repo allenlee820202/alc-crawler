@@ -74,7 +74,40 @@ def test_parse_attributes_include_room_floor_area(api_body: str) -> None:
 
     listing = listings[0]
     # Most listings have a room layout and floor; allow some tolerance.
-    assert listing.attributes.get("room") or listing.attributes.get("floor")
+    assert listing.room_layout or listing.floor
+
+
+def test_parse_first_class_fields_for_known_listing(api_body: str) -> None:
+    """First search result is houseid 20037271 (樟新街/正翔翠庭, 81.39 ping, 4房3廳3衛)."""
+    parser = Site591ApiParser()
+
+    listings = parser.parse(api_body, source_url="https://x")
+
+    target = next(item for item in listings if item.id.external_id == "20037271")
+    assert target.area_ping == pytest.approx(81.39)
+    assert target.main_area_ping == pytest.approx(26.71)
+    assert target.unit_price_per_ping == pytest.approx(45.07)
+    assert target.house_age_years == 34
+    assert target.room_layout == "4房3廳3衛"
+    assert target.floor == "B1~1F/2F"
+    assert target.community_name == "正翔翠庭"
+    assert target.view_count == 616
+    assert target.posted_at is not None
+    # posttime 1776170184 == 2026-04-13 in UTC
+    assert target.posted_at.year == 2026
+
+
+def test_parse_attributes_carry_softer_fields(api_body: str) -> None:
+    parser = Site591ApiParser()
+
+    listings = parser.parse(api_body, source_url="https://x")
+
+    target = next(item for item in listings if item.id.external_id == "20037271")
+    assert target.attributes.get("kind") == "住宅"
+    assert target.attributes.get("shape") == "電梯大樓"
+    assert target.attributes.get("agent_nick_name") == "仲介葉迎"
+    assert target.attributes.get("photo_count") == "17"
+    assert target.attributes.get("has_video") == "1"
 
 
 def test_parse_skips_malformed_items() -> None:

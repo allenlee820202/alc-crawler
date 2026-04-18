@@ -73,3 +73,51 @@ async def test_attributes_round_trip_as_json(db_path: Path) -> None:
 
     assert loaded is not None
     assert loaded.attributes == {"floor": "5", "size_ping": "28.5"}
+
+
+async def test_first_class_optional_fields_round_trip(db_path: Path) -> None:
+    repo = SqliteListingRepository(db_path)
+    await repo.initialize()
+
+    posted = datetime(2025, 11, 18, tzinfo=UTC)
+    rich = Listing(
+        id=ListingId("591", "rich"),
+        title="rich",
+        url="https://example.com/rich",
+        price=Price(36_680_000, "TWD"),
+        address=Address(city="台北市", district="文山區", raw="文山區樟新街"),
+        observed_at=datetime(2026, 4, 18, tzinfo=UTC),
+        area_ping=81.39,
+        main_area_ping=26.71,
+        unit_price_per_ping=45.07,
+        house_age_years=34,
+        room_layout="4房3廳3衛",
+        floor="B1~1F/2F",
+        community_name="正翔翠庭",
+        posted_at=posted,
+        view_count=616,
+    )
+    await repo.upsert(rich)
+    loaded = await repo.get(ListingId("591", "rich"))
+
+    assert loaded == rich
+
+
+async def test_first_class_optional_fields_default_to_none(db_path: Path) -> None:
+    """Listings with no optional fields set should round-trip cleanly."""
+    repo = SqliteListingRepository(db_path)
+    await repo.initialize()
+
+    minimal = Listing(
+        id=ListingId("591", "minimal"),
+        title="minimal",
+        url="https://example.com/m",
+        price=Price(1, "TWD"),
+        address=Address(city="台北市", district="大安區", raw="x"),
+    )
+    await repo.upsert(minimal)
+    loaded = await repo.get(ListingId("591", "minimal"))
+    assert loaded == minimal
+    assert loaded is not None
+    assert loaded.area_ping is None
+    assert loaded.posted_at is None

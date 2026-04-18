@@ -1,8 +1,13 @@
 """Listing aggregate root.
 
 Represents a property listing observed on a source site. The aggregate
-enforces invariants (non-empty title, valid URL) and exposes pure
-domain operations like `with_observed_at`.
+enforces invariants (non-empty title, valid URL, non-negative numerics)
+and exposes pure domain operations like `with_observed_at`.
+
+First-class fields are reserved for data we expect to filter/sort on
+in queries (area, price-per-ping, age, posted_at, view_count, etc.).
+Softer presentational data lives in `attributes` to avoid an ever-growing
+column set.
 """
 from __future__ import annotations
 
@@ -21,12 +26,32 @@ class Listing:
     address: Address
     observed_at: datetime | None = None
     attributes: dict[str, str] = field(default_factory=dict)
+    # Optional first-class fields, populated when the source provides them.
+    area_ping: float | None = None
+    main_area_ping: float | None = None
+    unit_price_per_ping: float | None = None
+    house_age_years: int | None = None
+    room_layout: str | None = None
+    floor: str | None = None
+    community_name: str | None = None
+    posted_at: datetime | None = None
+    view_count: int | None = None
 
     def __post_init__(self) -> None:
         if not self.title.strip():
             raise ValueError("Listing.title must not be blank")
         if not (self.url.startswith("http://") or self.url.startswith("https://")):
             raise ValueError("Listing.url must be an http(s) url")
+        if self.area_ping is not None and self.area_ping < 0:
+            raise ValueError("Listing.area_ping must be non-negative")
+        if self.main_area_ping is not None and self.main_area_ping < 0:
+            raise ValueError("Listing.main_area_ping must be non-negative")
+        if self.unit_price_per_ping is not None and self.unit_price_per_ping < 0:
+            raise ValueError("Listing.unit_price_per_ping must be non-negative")
+        if self.house_age_years is not None and self.house_age_years < 0:
+            raise ValueError("Listing.house_age_years must be non-negative")
+        if self.view_count is not None and self.view_count < 0:
+            raise ValueError("Listing.view_count must be non-negative")
 
     def with_observed_at(self, ts: datetime) -> Listing:
         """Return a new Listing with `observed_at` updated (immutability preserved)."""
