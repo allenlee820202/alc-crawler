@@ -80,6 +80,100 @@ NEW_TAIPEI_SECTION_IDS: dict[int, str] = {
     50: "淡水區",
 }
 
+# Section ids for 桃園市 (region=taoyuan). All 13 administrative districts
+# verified against the BFF.
+TAOYUAN_SECTION_IDS: dict[int, str] = {
+    67: "中壢區",
+    68: "平鎮區",
+    69: "龍潭區",
+    70: "楊梅區",
+    71: "新屋區",
+    72: "觀音區",
+    73: "桃園區",
+    74: "龜山區",
+    75: "八德區",
+    76: "大溪區",
+    77: "復興區",
+    78: "大園區",
+    79: "蘆竹區",
+}
+
+# Section ids for 台中市 (region=taichung). All 29 administrative districts
+# verified against the BFF.
+TAICHUNG_SECTION_IDS: dict[int, str] = {
+    98: "中區",
+    99: "東區",
+    100: "南區",
+    101: "西區",
+    102: "北區",
+    103: "北屯區",
+    104: "西屯區",
+    105: "南屯區",
+    106: "太平區",
+    107: "大里區",
+    108: "霧峰區",
+    109: "烏日區",
+    110: "豐原區",
+    111: "后里區",
+    112: "石岡區",
+    113: "東勢區",
+    114: "和平區",
+    115: "新社區",
+    116: "潭子區",
+    117: "大雅區",
+    118: "神岡區",
+    119: "大肚區",
+    120: "沙鹿區",
+    121: "龍井區",
+    122: "梧棲區",
+    123: "清水區",
+    124: "大甲區",
+    125: "外埔區",
+    126: "大安區",
+}
+
+# Section ids for 高雄市 (region=kaohsiung). 35 of 高雄市's 38 administrative
+# districts have confirmed ids; mountain-indigenous districts (那瑪夏/桃源/茂林)
+# are likely 256, 257, 279-281 but currently return zero listings, so they
+# are omitted to avoid asserting unverified ids.
+KAOHSIUNG_SECTION_IDS: dict[int, str] = {
+    243: "新興區",
+    244: "前金區",
+    245: "苓雅區",
+    246: "鹽埕區",
+    247: "鼓山區",
+    248: "旗津區",
+    249: "前鎮區",
+    250: "三民區",
+    251: "楠梓區",
+    252: "小港區",
+    253: "左營區",
+    254: "仁武區",
+    255: "大社區",
+    258: "岡山區",
+    259: "路竹區",
+    260: "阿蓮區",
+    261: "田寮區",
+    262: "燕巢區",
+    263: "橋頭區",
+    264: "梓官區",
+    265: "彌陀區",
+    266: "永安區",
+    267: "湖內區",
+    268: "鳳山區",
+    269: "大寮區",
+    270: "林園區",
+    271: "鳥松區",
+    272: "大樹區",
+    273: "旗山區",
+    274: "美濃區",
+    275: "六龜區",
+    276: "內門區",
+    277: "杉林區",
+    278: "甲仙區",
+    282: "茄萣區",
+}
+
 # Shape (建物型態) ids accepted by 591's BFF.
 SHAPE_IDS: dict[int, str] = {
     1: "公寓",

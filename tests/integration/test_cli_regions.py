@@ -48,6 +48,46 @@ def test_regions_shows_new_taipei_section_table() -> None:
     assert "50" in result.output
 
 
+def test_regions_shows_taoyuan_section_table() -> None:
+    runner = CliRunner()
+    result = runner.invoke(app, ["regions"])
+
+    assert result.exit_code == 0, result.output
+    # Probed mappings: 67=中壢, 73=桃園, 79=蘆竹.
+    assert "中壢" in result.output
+    assert "67" in result.output
+    assert "桃園區" in result.output
+    assert "73" in result.output
+    assert "蘆竹" in result.output
+    assert "79" in result.output
+
+
+def test_regions_shows_taichung_section_table() -> None:
+    runner = CliRunner()
+    result = runner.invoke(app, ["regions"])
+
+    assert result.exit_code == 0, result.output
+    # Probed mappings: 98=中區, 103=北屯區, 126=大安區.
+    assert "中區" in result.output
+    assert "98" in result.output
+    assert "北屯" in result.output
+    assert "103" in result.output
+
+
+def test_regions_shows_kaohsiung_section_table() -> None:
+    runner = CliRunner()
+    result = runner.invoke(app, ["regions"])
+
+    assert result.exit_code == 0, result.output
+    # Probed mappings: 245=苓雅, 250=三民, 268=鳳山.
+    assert "苓雅" in result.output
+    assert "245" in result.output
+    assert "三民" in result.output
+    assert "250" in result.output
+    assert "鳳山" in result.output
+    assert "268" in result.output
+
+
 def test_regions_shows_shape_table() -> None:
     runner = CliRunner()
     result = runner.invoke(app, ["regions"])

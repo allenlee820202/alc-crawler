@@ -9,10 +9,13 @@ import typer
 
 from alc_crawler.adapters.sites.site_591.crawl_service import Site591CrawlService
 from alc_crawler.adapters.sites.site_591.search_urls import (
+    KAOHSIUNG_SECTION_IDS,
     NEW_TAIPEI_SECTION_IDS,
     REGION_IDS,
     SHAPE_IDS,
+    TAICHUNG_SECTION_IDS,
     TAIPEI_SECTION_IDS,
+    TAOYUAN_SECTION_IDS,
     search_urls_for_region,
 )
 from alc_crawler.infrastructure.http.httpx_fetcher import HttpxFetcher
@@ -377,7 +380,22 @@ def regions() -> None:
     for sid, name in sorted(NEW_TAIPEI_SECTION_IDS.items()):
         typer.echo(f"  {sid:>3}  {name}")
     typer.echo("  (三芝/石門 may exist but currently return zero listings.)")
-    typer.echo("  (Other regions: inspect 591's UI; ids not yet probed.)")
+    typer.echo("")
+    typer.echo("Section ids for 桃園市 (--section, when --region taoyuan):")
+    typer.echo(f"  {'id':>3}  區")
+    for sid, name in sorted(TAOYUAN_SECTION_IDS.items()):
+        typer.echo(f"  {sid:>3}  {name}")
+    typer.echo("")
+    typer.echo("Section ids for 台中市 (--section, when --region taichung):")
+    typer.echo(f"  {'id':>3}  區")
+    for sid, name in sorted(TAICHUNG_SECTION_IDS.items()):
+        typer.echo(f"  {sid:>3}  {name}")
+    typer.echo("")
+    typer.echo("Section ids for 高雄市 (--section, when --region kaohsiung):")
+    typer.echo(f"  {'id':>3}  區")
+    for sid, name in sorted(KAOHSIUNG_SECTION_IDS.items()):
+        typer.echo(f"  {sid:>3}  {name}")
+    typer.echo("  (那瑪夏/桃源/茂林 may exist but currently return zero listings.)")
     typer.echo("")
     typer.echo("Shape ids (--shape, comma-separated for OR):")
     typer.echo(f"  {'id':>3}  類型")
