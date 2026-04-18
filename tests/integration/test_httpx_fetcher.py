@@ -25,14 +25,15 @@ async def test_get_returns_status_and_body() -> None:
 
 
 @respx.mock
-async def test_default_user_agent_is_set() -> None:
+async def test_default_user_agent_is_browser_like() -> None:
+    """Default UA must be browser-like; many TW sites 404 a generic bot UA."""
     route = respx.get("https://example.com/").mock(return_value=httpx.Response(200, text=""))
     fetcher = HttpxFetcher()
 
     await fetcher.get("https://example.com/")
 
     sent = route.calls.last.request
-    assert "alc-crawler" in sent.headers["user-agent"].lower()
+    assert "Mozilla/5.0" in sent.headers["user-agent"]
 
 
 @respx.mock
@@ -79,3 +80,46 @@ def test_verify_defaults_to_true() -> None:
 def test_verify_can_be_disabled() -> None:
     fetcher = HttpxFetcher(verify=False)
     assert fetcher.verify is False
+
+
+@respx.mock
+async def test_default_user_agent_can_be_browser_like() -> None:
+    """A browser-like UA can be supplied to bypass naive bot filters."""
+    route = respx.get("https://example.com/").mock(return_value=httpx.Response(200, text=""))
+    fetcher = HttpxFetcher(user_agent="Mozilla/5.0 (Test)")
+
+    await fetcher.get("https://example.com/")
+
+    assert "Mozilla/5.0" in route.calls.last.request.headers["user-agent"]
+
+
+@respx.mock
+async def test_session_persists_cookies_across_requests() -> None:
+    """Cookies set by one response must be sent on the next request to the same host."""
+    respx.get("https://example.com/warmup").mock(
+        return_value=httpx.Response(
+            200, text="", headers={"set-cookie": "T591_TOKEN=abc; Path=/"}
+        )
+    )
+    second = respx.get("https://example.com/list").mock(return_value=httpx.Response(200, text=""))
+
+    fetcher = HttpxFetcher()
+    async with fetcher.session() as session:
+        await session.get("https://example.com/warmup")
+        await session.get("https://example.com/list")
+
+    cookie_header = second.calls.last.request.headers.get("cookie", "")
+    assert "T591_TOKEN=abc" in cookie_header
+
+
+@respx.mock
+async def test_per_request_headers_merge_with_defaults() -> None:
+    """Caller can supply Referer (etc.) on a single get() call."""
+    route = respx.get("https://example.com/api").mock(return_value=httpx.Response(200, text=""))
+    fetcher = HttpxFetcher()
+
+    await fetcher.get("https://example.com/api", headers={"Referer": "https://example.com/"})
+
+    sent = route.calls.last.request
+    assert sent.headers["referer"] == "https://example.com/"
+    assert "Mozilla" in sent.headers["user-agent"]

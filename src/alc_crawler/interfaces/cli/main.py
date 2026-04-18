@@ -6,18 +6,17 @@ from pathlib import Path
 
 import typer
 
-from alc_crawler.adapters.sites.site_591.search_parser import Site591SearchParser
-from alc_crawler.adapters.sites.site_591.search_urls import search_url_for_region
-from alc_crawler.application.use_cases.crawl_search_page import (
-    CrawlSearchPage,
-    CrawlSearchPageCommand,
-)
+from alc_crawler.adapters.sites.site_591.crawl_service import Site591CrawlService
+from alc_crawler.adapters.sites.site_591.search_urls import search_urls_for_region
 from alc_crawler.infrastructure.http.httpx_fetcher import HttpxFetcher
 from alc_crawler.infrastructure.persistence.sqlite.listing_repository import (
     SqliteListingRepository,
 )
 
-app = typer.Typer(help="Self-hosted crawler for Taiwan house-selling sites.", no_args_is_help=True)
+app = typer.Typer(
+    help="Self-hosted crawler for Taiwan house-selling sites.",
+    no_args_is_help=True,
+)
 
 
 @app.callback()
@@ -45,18 +44,17 @@ def crawl(
     if site != "591":
         raise typer.BadParameter(f"Unsupported site '{site}'. Currently only '591'.")
 
-    url = search_url_for_region(region, page=page)
+    urls = search_urls_for_region(region, page=page)
     db.parent.mkdir(parents=True, exist_ok=True)
 
     async def _run() -> None:
         repo = SqliteListingRepository(db)
         await repo.initialize()
-        use_case = CrawlSearchPage(
+        service = Site591CrawlService(
             fetcher=HttpxFetcher(verify=not insecure),
             repo=repo,
-            parser=Site591SearchParser(),
         )
-        result = await use_case.execute(CrawlSearchPageCommand(url=url))
+        result = await service.crawl(urls)
         typer.echo(f"fetched={result.fetched} persisted={result.persisted}")
 
     asyncio.run(_run())
