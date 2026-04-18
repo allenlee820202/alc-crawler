@@ -26,6 +26,35 @@ _REGION_IDS = {
     "kaohsiung": 17,
 }
 
+# Public read-only views of 591's id space for CLI/agent introspection.
+REGION_IDS: dict[str, int] = dict(_REGION_IDS)
+
+# Section ids for 台北市 (region=taipei). 3 is intentionally omitted: 591's
+# BFF returns malformed JSON for that section. Other regions have their own
+# section id spaces; documenting only the verified-working set here.
+TAIPEI_SECTION_IDS: dict[int, str] = {
+    1: "中正區",
+    2: "大同區",
+    4: "松山區",
+    5: "大安區",
+    6: "萬華區",
+    7: "信義區",
+    8: "士林區",
+    9: "北投區",
+    10: "內湖區",
+    11: "南港區",
+    12: "文山區",
+}
+
+# Shape (建物型態) ids accepted by 591's BFF.
+SHAPE_IDS: dict[int, str] = {
+    1: "公寓",
+    2: "電梯大樓",
+    3: "透天厝",
+    4: "別墅",
+    8: "店面",
+}
+
 _PAGE_SIZE = 30
 
 

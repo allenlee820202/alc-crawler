@@ -8,7 +8,12 @@ from pathlib import Path
 import typer
 
 from alc_crawler.adapters.sites.site_591.crawl_service import Site591CrawlService
-from alc_crawler.adapters.sites.site_591.search_urls import search_urls_for_region
+from alc_crawler.adapters.sites.site_591.search_urls import (
+    REGION_IDS,
+    SHAPE_IDS,
+    TAIPEI_SECTION_IDS,
+    search_urls_for_region,
+)
 from alc_crawler.infrastructure.http.httpx_fetcher import HttpxFetcher
 from alc_crawler.infrastructure.persistence.sqlite.listing_repository import (
     SqliteListingRepository,
@@ -24,6 +29,7 @@ app = typer.Typer(
         "--max-price-wan 4000 --max-age 25 --min-rooms 2 --max-rooms 3`\n\n"
         "Run `alc-crawler crawl --help` and `alc-crawler query --help` for the "
         "full ID tables and filter list."
+        "\n\nRun `alc-crawler regions` to introspect supported region/section/shape ids."
     ),
     no_args_is_help=True,
 )
@@ -346,6 +352,30 @@ def query(
             f"{community_str} | {room or ''} {floor or ''} | posted={posted_str} | {title}"
         )
         typer.echo(f"           {url}")
+
+
+@app.command(name="regions")
+def regions() -> None:
+    """List 591 region keys, 台北市 section ids, and shape ids.
+
+    Use this to discover the values you can pass to `crawl --region`,
+    `crawl --section`, and `crawl --shape`.
+    """
+    typer.echo("Regions (--region):")
+    typer.echo(f"  {'key':<12}  region_id")
+    for key, rid in sorted(REGION_IDS.items(), key=lambda kv: kv[1]):
+        typer.echo(f"  {key:<12}  {rid}")
+    typer.echo("")
+    typer.echo("Section ids for 台北市 (--section, when --region taipei):")
+    typer.echo(f"  {'id':>3}  區")
+    for sid, name in sorted(TAIPEI_SECTION_IDS.items()):
+        typer.echo(f"  {sid:>3}  {name}")
+    typer.echo("  (Other regions have their own section id spaces; inspect 591's UI.)")
+    typer.echo("")
+    typer.echo("Shape ids (--shape, comma-separated for OR):")
+    typer.echo(f"  {'id':>3}  類型")
+    for shid, label in sorted(SHAPE_IDS.items()):
+        typer.echo(f"  {shid:>3}  {label}")
 
 
 if __name__ == "__main__":

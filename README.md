@@ -19,6 +19,12 @@ uv run alc-crawler --help
 
 Requires Python 3.13 + [`uv`](https://github.com/astral-sh/uv).
 
+Discover supported region/section/shape ids:
+
+```bash
+uv run alc-crawler regions
+```
+
 ---
 
 ## Two-step workflow
