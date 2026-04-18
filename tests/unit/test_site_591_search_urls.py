@@ -35,3 +35,30 @@ def test_region_lookup_is_case_insensitive() -> None:
 
 def test_back_compat_helper_returns_api_url() -> None:
     assert search_url_for_region("taipei") == search_urls_for_region("taipei").api_url
+
+
+def test_section_filter_appended_to_both_urls() -> None:
+    urls = search_urls_for_region("taipei", section_id=10)
+    assert "section=10" in urls.api_url
+    assert "section=10" in urls.referer_url
+
+
+def test_shape_filter_accepts_iterable_and_renders_csv() -> None:
+    urls = search_urls_for_region("taipei", shape_ids=[1, 2])
+    assert "shape=1%2C2" in urls.api_url or "shape=1,2" in urls.api_url
+
+
+def test_filters_omitted_when_unset() -> None:
+    urls = search_urls_for_region("taipei")
+    assert "section=" not in urls.api_url
+    assert "shape=" not in urls.api_url
+
+
+def test_section_id_must_be_positive() -> None:
+    with pytest.raises(ValueError, match="section_id"):
+        search_urls_for_region("taipei", section_id=0)
+
+
+def test_shape_ids_must_be_positive() -> None:
+    with pytest.raises(ValueError, match="shape"):
+        search_urls_for_region("taipei", shape_ids=[1, -2])

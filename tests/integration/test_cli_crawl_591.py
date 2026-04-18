@@ -96,3 +96,35 @@ def test_crawl_591_sends_referer_to_bff(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
     referer = api_route.calls.last.request.headers.get("referer", "")
     assert "sale.591.com.tw" in referer
+
+
+@respx.mock
+def test_crawl_591_pushes_section_and_shape_filters_to_bff(tmp_path: Path) -> None:
+    """`--section 10 --shape 1,2` must reach the BFF query string."""
+    api_body = (FIXTURES / "api_search_taipei_page1.json").read_text(encoding="utf-8")
+    respx.get(host="sale.591.com.tw").mock(return_value=httpx.Response(200, text="<html/>"))
+    api_route = respx.get(host="bff-house.591.com.tw").mock(
+        return_value=httpx.Response(200, text=api_body)
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        [
+            "crawl",
+            "591",
+            "--region",
+            "taipei",
+            "--section",
+            "10",
+            "--shape",
+            "1,2",
+            "--db",
+            str(tmp_path / "x.sqlite"),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    last_url = str(api_route.calls.last.request.url)
+    assert "section=10" in last_url
+    assert "shape=1%2C2" in last_url or "shape=1,2" in last_url
