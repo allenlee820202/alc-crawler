@@ -69,3 +69,13 @@ async def test_raises_after_exhausting_retries() -> None:
 
     with pytest.raises(httpx.HTTPStatusError):
         await fetcher.get("https://example.com/")
+
+
+def test_verify_defaults_to_true() -> None:
+    fetcher = HttpxFetcher()
+    assert fetcher.verify is True
+
+
+def test_verify_can_be_disabled() -> None:
+    fetcher = HttpxFetcher(verify=False)
+    assert fetcher.verify is False

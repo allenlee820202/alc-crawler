@@ -22,11 +22,13 @@ class HttpxFetcher:
         max_retries: int = 3,
         retry_backoff: float = 0.5,
         user_agent: str = _DEFAULT_UA,
+        verify: bool = True,
     ) -> None:
         self._timeout = timeout
         self._max_retries = max_retries
         self._retry_backoff = retry_backoff
         self._user_agent = user_agent
+        self.verify = verify
 
     async def get(
         self, url: str, *, headers: dict[str, str] | None = None
@@ -42,7 +44,9 @@ class HttpxFetcher:
             reraise=True,
         ):
             with attempt:
-                async with httpx.AsyncClient(timeout=self._timeout) as client:
+                async with httpx.AsyncClient(
+                    timeout=self._timeout, verify=self.verify
+                ) as client:
                     response = await client.get(url, headers=merged_headers)
                     response.raise_for_status()
                     return FetchResult(url=url, status=response.status_code, body=response.text)

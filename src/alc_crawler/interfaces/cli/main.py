@@ -31,6 +31,15 @@ def crawl(
     region: str = typer.Option(..., "--region", help="Region key, e.g. 'taipei'."),
     page: int = typer.Option(1, "--page", help="Search page number (1-indexed)."),
     db: Path = typer.Option(Path("data/listings.sqlite"), "--db", help="SQLite DB path."),
+    insecure: bool = typer.Option(
+        False,
+        "--insecure",
+        help=(
+            "Disable TLS verification. Workaround for sites whose CA chain is "
+            "rejected by your local OpenSSL (e.g. 591's TWCA intermediate is "
+            "missing the RFC 5280 Subject Key Identifier extension)."
+        ),
+    ),
 ) -> None:
     """Crawl one search page and persist results to SQLite."""
     if site != "591":
@@ -43,7 +52,7 @@ def crawl(
         repo = SqliteListingRepository(db)
         await repo.initialize()
         use_case = CrawlSearchPage(
-            fetcher=HttpxFetcher(),
+            fetcher=HttpxFetcher(verify=not insecure),
             repo=repo,
             parser=Site591SearchParser(),
         )
