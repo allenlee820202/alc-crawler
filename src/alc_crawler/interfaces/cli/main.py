@@ -15,7 +15,16 @@ from alc_crawler.infrastructure.persistence.sqlite.listing_repository import (
 )
 
 app = typer.Typer(
-    help="Self-hosted crawler for Taiwan house-selling sites.",
+    help=(
+        "Self-hosted crawler for Taiwan house-selling sites.\n\n"
+        "Two-step workflow:\n"
+        "  1) `alc-crawler crawl 591 --region taipei --section 10 --shape 1,2 "
+        "--max-pages 10 --insecure --db data/daan.sqlite`\n"
+        "  2) `alc-crawler query --db data/daan.sqlite --section-name 內湖區 "
+        "--max-price-wan 4000 --max-age 25 --min-rooms 2 --max-rooms 3`\n\n"
+        "Run `alc-crawler crawl --help` and `alc-crawler query --help` for the "
+        "full ID tables and filter list."
+    ),
     no_args_is_help=True,
 )
 
@@ -37,8 +46,19 @@ def _parse_csv_ints(raw: str | None, *, flag: str) -> list[int] | None:
 @app.command(name="crawl")
 def crawl(
     site: str = typer.Argument(..., help="Site to crawl. Currently only '591' is supported."),
-    region: str = typer.Option(..., "--region", help="Region key, e.g. 'taipei'."),
-    page: int = typer.Option(1, "--page", help="Starting page number (1-indexed)."),
+    region: str = typer.Option(
+        ...,
+        "--region",
+        help=(
+            "Region key. Supported: taipei, new-taipei, taoyuan, taichung, "
+            "kaohsiung."
+        ),
+    ),
+    page: int = typer.Option(
+        1,
+        "--page",
+        help="Starting page number (1-indexed; 30 listings/page).",
+    ),
     max_pages: int = typer.Option(
         1,
         "--max-pages",
@@ -48,25 +68,45 @@ def crawl(
     section: int | None = typer.Option(
         None,
         "--section",
-        help="591 section/district id (e.g. 10 = 內湖區). Use `crawl --help` for ids.",
+        help=(
+            "591 section/district id. 台北市: 1=中正 2=大同 4=松山 5=大安 "
+            "6=萬華 7=信義 8=士林 9=北投 10=內湖 11=南港 12=文山. "
+            "Other cities have their own ids; check 591's UI."
+        ),
     ),
     shape: str | None = typer.Option(
         None,
         "--shape",
-        help="Comma-separated 591 shape ids (1=公寓, 2=電梯大樓, 3=透天厝, 4=別墅).",
+        help=(
+            "Comma-separated 591 shape ids. 1=公寓 2=電梯大樓 3=透天厝 "
+            "4=別墅 8=店面. Example: --shape 1,2 (公寓 OR 電梯大樓)."
+        ),
     ),
     db: Path = typer.Option(Path("data/listings.sqlite"), "--db", help="SQLite DB path."),
     insecure: bool = typer.Option(
         False,
         "--insecure",
         help=(
-            "Disable TLS verification. Workaround for sites whose CA chain is "
-            "rejected by your local OpenSSL (e.g. 591's TWCA intermediate is "
-            "missing the RFC 5280 Subject Key Identifier extension)."
+            "Disable TLS verification. Currently REQUIRED for 591 because "
+            "their TWCA intermediate cert is missing the RFC 5280 Subject Key "
+            "Identifier extension and is rejected by recent OpenSSL."
         ),
     ),
 ) -> None:
-    """Crawl one or more search pages and persist results to SQLite."""
+    """Crawl 591 search pages and persist listings to a SQLite DB.
+
+    Examples:
+
+      # 內湖區, 公寓+電梯大樓, first 10 pages -> ~300 listings
+      alc-crawler crawl 591 --region taipei --section 10 --shape 1,2 \\
+          --max-pages 10 --insecure --db data/daan.sqlite
+
+      # Whole 台北市 (no --section), only 透天厝, deeper crawl
+      alc-crawler crawl 591 --region taipei --shape 3 \\
+          --max-pages 30 --insecure --db data/taipei-houses.sqlite
+
+    Output line format:  pages=<N> fetched=<M> persisted=<K>
+    """
     if site != "591":
         raise typer.BadParameter(f"Unsupported site '{site}'. Currently only '591'.")
 
@@ -153,19 +193,44 @@ def query(
     order_by: str = typer.Option(
         "price_amount",
         "--order-by",
-        help="Sort column: price_amount, unit_price_per_ping, area_ping, posted_at.",
+        help=(
+            "Sort column. One of: price_amount, unit_price_per_ping, "
+            "area_ping, house_age_years, posted_at."
+        ),
     ),
     desc: bool = typer.Option(False, "--desc", help="Sort descending."),
     limit: int = typer.Option(50, "--limit", help="Max rows to print."),
 ) -> None:
     """Query persisted listings with practical filters.
 
-    Example::
+    All filters AND together. `--section-name` and `--shape-name` accept
+    repeats which OR within their group. Numeric ranges use 萬 for price
+    (1萬 = 10,000 TWD) and 坪 for area.
 
-        alc-crawler query --section-name 內湖區 \\
-                          --shape-name 公寓 --shape-name 電梯大樓 \\
-                          --max-price-wan 4000 --max-age 25 \\
-                          --address-contains 大安
+    Output: one listing per pair of lines. Header line is
+    "matches: N", followed by:
+
+      [<external_id>] <price>萬 <area>坪 <unit>萬/坪 <age>年 <shape> | \\
+      <district> <addr> | <community> | <room_layout> <floor> | \\
+      posted=<YYYY-MM-DD> | <title>
+                 <url>
+
+    Examples:
+
+      # Full constraint set: 內湖區 公寓/電梯大樓, ≤4000萬, ≤32年, 2-3房, ≥30坪
+      alc-crawler query --db data/daan.sqlite \\
+          --section-name 內湖區 \\
+          --shape-name 公寓 --shape-name 電梯大樓 \\
+          --max-price-wan 4000 --max-age 25 \\
+          --min-rooms 2 --max-rooms 3 --min-area 25
+
+      # Narrow by school keyword in agent's title
+      alc-crawler query --db data/daan.sqlite \\
+          --title-contains 大安 --order-by price_amount
+
+      # Sort by best $/坪 within budget, take top 10
+      alc-crawler query --db data/daan.sqlite \\
+          --max-price-wan 4000 --order-by unit_price_per_ping --limit 10
     """
     allowed_sort = {
         "price_amount",
