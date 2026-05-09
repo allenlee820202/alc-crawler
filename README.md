@@ -271,11 +271,106 @@ src/alc_crawler/
 ├── application/     # Use cases + ports (Fetcher, ListingRepository)
 ├── infrastructure/  # Adapters: SQLite repo, httpx fetcher
 ├── adapters/sites/  # Per-site parsers + URL builders (anti-corruption layer)
-└── interfaces/cli/  # Typer CLI
+├── interfaces/cli/  # Typer CLI (`alc-crawler`)
+└── tracking/        # Time-series submodule (own domain/app/infra/cli)
+    ├── domain/          # ListingSnapshot, PriceChange, DistrictSummary, ...
+    ├── application/     # Use cases + SnapshotRepository port
+    ├── infrastructure/  # DuckDB adapter + schema.sql
+    └── interfaces/
+        ├── cli/         # Typer CLI (`alc-tracker`)
+        └── reports/     # Markdown + matplotlib renderers
 ```
 
 Storage is SQLite via the `ListingRepository` port; swap to PostgreSQL/Redis
-without touching application or domain code.
+without touching application or domain code. The tracking submodule reads
+the canonical SQLite read-only and writes its own DuckDB — never the other
+way around.
+
+---
+
+## Tracking (price history & market trends)
+
+`alc-crawler` always overwrites the latest state. To answer "did this
+listing's price drop?" or "what's the median 大安區 unit price this week?"
+you need a time-series store. The `alc-tracker` CLI maintains a separate
+**DuckDB** file with one append-only row per `(snapshot_date, site,
+external_id)`.
+
+```
+alc-crawler crawl ...     # writes data/listings.sqlite (latest state)
+alc-tracker snapshot ...  # copies today's state -> data/tracking.duckdb
+alc-tracker price-changes ...
+alc-tracker market-summary ...
+```
+
+### Daily snapshot
+
+```bash
+# Run after the daily crawl. Idempotent: re-running for the same --date
+# overwrites that day's rows, so cron retries are safe.
+uv run alc-tracker snapshot \
+    --canonical-db data/listings.sqlite \
+    --tracking-db  data/tracking.duckdb \
+    --date 2026-05-09           # optional; defaults to today
+```
+
+### Price changes
+
+```bash
+# Listings whose price moved between --since and --until.
+# --until defaults to today. Markdown is the default output format.
+uv run alc-tracker price-changes \
+    --tracking-db data/tracking.duckdb \
+    --since 2026-05-01 --until 2026-05-09 \
+    --site 591 --only-drops
+```
+
+`--format plain` emits a fixed-width text table instead of a markdown one.
+
+### Market summary
+
+```bash
+# Per-district median price + median/P25/P75 unit price for one day.
+# Pass --chart to also write a PNG bar chart with P25-P75 error bars.
+uv run alc-tracker market-summary \
+    --tracking-db data/tracking.duckdb \
+    --date 2026-05-09 \
+    --site 591 \
+    --chart out/unit-price-2026-05-09.png
+```
+
+The chart uses matplotlib's headless `Agg` backend and probes for a
+CJK-capable system font (PingFang TC, Heiti TC, Noto Sans CJK, ...) so
+district names render as glyphs instead of tofu boxes.
+
+### Cron example (macOS launchd / Linux cron)
+
+```cron
+# 07:00 daily: refresh canonical state, then snapshot it.
+0 7 * * *  cd ~/Documents/projects/alc-crawler && \
+           uv run alc-crawler crawl 591 --region taipei --section 5 \
+               --max-pages 10 --insecure --db data/daan.sqlite && \
+           uv run alc-tracker snapshot \
+               --canonical-db data/daan.sqlite \
+               --tracking-db  data/tracking.duckdb
+```
+
+### DuckDB schema
+
+Two tables in the tracking DB:
+
+| Table | PK | Notes |
+|---|---|---|
+| `listing_snapshots` | `(snapshot_date, site, external_id)` | One row per listing per day; ON CONFLICT updates that day's row. |
+| `crawl_runs` | `(run_id)` | Provenance: timestamp, status, listing_count, error message. |
+
+Query directly when the CLI is too restrictive:
+
+```bash
+duckdb data/tracking.duckdb \
+  "SELECT snapshot_date, COUNT(*) FROM listing_snapshots
+   WHERE district='大安區' GROUP BY 1 ORDER BY 1 DESC LIMIT 14;"
+```
 
 ---
 
