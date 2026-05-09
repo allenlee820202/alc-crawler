@@ -19,6 +19,7 @@ from pathlib import Path
 
 import typer
 
+from alc_crawler.domain.value_objects import ListingId
 from alc_crawler.infrastructure.persistence.sqlite.listing_repository import (
     SqliteListingRepository,
 )
@@ -33,6 +34,9 @@ from alc_crawler.tracking.application.use_cases.record_daily_snapshots import (
 )
 from alc_crawler.tracking.infrastructure.duckdb.snapshot_repository import (
     DuckDbSnapshotRepository,
+)
+from alc_crawler.tracking.infrastructure.duckdb.watchlist_repository import (
+    DuckDbWatchlistRepository,
 )
 from alc_crawler.tracking.interfaces.reports.charts import (
     render_unit_price_distribution_chart,
@@ -242,3 +246,80 @@ def _parse_date(raw: str) -> date:
         raise typer.BadParameter(
             f"date must be ISO format (YYYY-MM-DD), got: {raw!r}"
         ) from exc
+
+
+# --- watch sub-app ----------------------------------------------------------
+# `alc-tracker watch add/remove/list` manages the manual watchlist. We use a
+# nested Typer app so the verbs stay grouped and don't clutter root --help.
+
+watch_app = typer.Typer(
+    help="Manage the manual watchlist.",
+    no_args_is_help=True,
+)
+app.add_typer(watch_app, name="watch")
+
+
+def _watchlist_repo(tracking_db: Path) -> DuckDbWatchlistRepository:
+    repo = DuckDbWatchlistRepository(tracking_db)
+    repo.initialize()
+    return repo
+
+
+@watch_app.command("add")
+def watch_add(
+    site: str = typer.Argument(..., help="Site key (e.g. '591')."),
+    external_id: str = typer.Argument(..., help="Listing id within the site."),
+    tracking_db: Path = typer.Option(
+        ..., "--tracking-db", help="Path to tracking DuckDB."
+    ),
+    nickname: str | None = typer.Option(
+        None, "--nickname", help="Optional human-readable label."
+    ),
+) -> None:
+    """Add a listing to the watchlist (or update its nickname)."""
+    repo = _watchlist_repo(tracking_db)
+    watch = repo.add(ListingId(site, external_id), nickname=nickname)
+    label = f" ({watch.nickname})" if watch.nickname else ""
+    typer.echo(f"Added {watch.listing_id}{label}")
+
+
+@watch_app.command("remove")
+def watch_remove(
+    site: str = typer.Argument(..., help="Site key (e.g. '591')."),
+    external_id: str = typer.Argument(..., help="Listing id within the site."),
+    tracking_db: Path = typer.Option(
+        ..., "--tracking-db", help="Path to tracking DuckDB."
+    ),
+) -> None:
+    """Remove a listing from the watchlist."""
+    repo = _watchlist_repo(tracking_db)
+    listing_id = ListingId(site, external_id)
+    if repo.remove(listing_id):
+        typer.echo(f"Removed {listing_id}")
+    else:
+        typer.echo(f"{listing_id} is not watched", err=True)
+        raise typer.Exit(code=1)
+
+
+@watch_app.command("list")
+def watch_list(
+    tracking_db: Path = typer.Option(
+        ..., "--tracking-db", help="Path to tracking DuckDB."
+    ),
+    site: str | None = typer.Option(
+        None, "--site", help="Restrict to one site (e.g. '591')."
+    ),
+) -> None:
+    """Print the watchlist, oldest entry first."""
+    repo = _watchlist_repo(tracking_db)
+    items = repo.list_all(site=site)
+    if not items:
+        typer.echo("No watched listings.")
+        return
+    typer.echo(f"{'listing':<24} {'added_at':<20} nickname")
+    for w in items:
+        typer.echo(
+            f"{w.listing_id!s:<24} "
+            f"{w.added_at.strftime('%Y-%m-%d %H:%M:%S'):<20} "
+            f"{w.nickname or ''}"
+        )

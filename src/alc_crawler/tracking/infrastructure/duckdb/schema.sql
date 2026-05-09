@@ -33,3 +33,14 @@ CREATE TABLE IF NOT EXISTS crawl_runs (
     status             TEXT       NOT NULL,
     error_message      TEXT
 );
+
+-- watched_listings: manual watchlist curated by the user.
+-- One row per (site, external_id). Re-adding updates nickname but
+-- does NOT bump added_at (use ON CONFLICT DO UPDATE on nickname only).
+CREATE TABLE IF NOT EXISTS watched_listings (
+    site        TEXT      NOT NULL,
+    external_id TEXT      NOT NULL,
+    nickname    TEXT,
+    added_at    TIMESTAMP NOT NULL,
+    PRIMARY KEY (site, external_id)
+);

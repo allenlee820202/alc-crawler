@@ -301,5 +301,145 @@ class TestHelp:
     def test_root_help_lists_all_subcommands(self) -> None:
         result = runner.invoke(app, ["--help"])
         assert result.exit_code == 0
-        for cmd in ("snapshot", "price-changes", "market-summary"):
+        for cmd in ("snapshot", "price-changes", "market-summary", "watch"):
             assert cmd in result.output
+
+
+class TestWatchCommands:
+    @pytest.fixture
+    def tracking_db(self, tmp_path: Path) -> Path:
+        return tmp_path / "tracking.duckdb"
+
+    def test_add_then_list_round_trips(self, tracking_db: Path) -> None:
+        result = runner.invoke(
+            app,
+            [
+                "watch",
+                "add",
+                "591",
+                "1",
+                "--tracking-db",
+                str(tracking_db),
+                "--nickname",
+                "near 大安國中",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        assert "Added" in result.output
+        assert "591:1" in result.output
+
+        result = runner.invoke(
+            app, ["watch", "list", "--tracking-db", str(tracking_db)]
+        )
+        assert result.exit_code == 0, result.output
+        assert "591:1" in result.output
+        assert "near 大安國中" in result.output
+
+    def test_list_empty(self, tracking_db: Path) -> None:
+        result = runner.invoke(
+            app, ["watch", "list", "--tracking-db", str(tracking_db)]
+        )
+        assert result.exit_code == 0, result.output
+        assert "No watched listings" in result.output
+
+    def test_remove_existing_returns_success(self, tracking_db: Path) -> None:
+        runner.invoke(
+            app,
+            ["watch", "add", "591", "1", "--tracking-db", str(tracking_db)],
+        )
+        result = runner.invoke(
+            app,
+            ["watch", "remove", "591", "1", "--tracking-db", str(tracking_db)],
+        )
+        assert result.exit_code == 0, result.output
+        assert "Removed" in result.output
+        # Verify it's gone.
+        result = runner.invoke(
+            app, ["watch", "list", "--tracking-db", str(tracking_db)]
+        )
+        assert "No watched listings" in result.output
+
+    def test_remove_missing_exits_nonzero(self, tracking_db: Path) -> None:
+        # Initialize an empty DB so the file exists.
+        runner.invoke(
+            app,
+            ["watch", "list", "--tracking-db", str(tracking_db)],
+        )
+        result = runner.invoke(
+            app,
+            [
+                "watch",
+                "remove",
+                "591",
+                "999",
+                "--tracking-db",
+                str(tracking_db),
+            ],
+        )
+        assert result.exit_code != 0
+        assert "not watched" in result.output.lower()
+
+    def test_list_filters_by_site(self, tracking_db: Path) -> None:
+        runner.invoke(
+            app,
+            ["watch", "add", "591", "1", "--tracking-db", str(tracking_db)],
+        )
+        runner.invoke(
+            app,
+            [
+                "watch",
+                "add",
+                "yungching",
+                "9",
+                "--tracking-db",
+                str(tracking_db),
+            ],
+        )
+        result = runner.invoke(
+            app,
+            [
+                "watch",
+                "list",
+                "--tracking-db",
+                str(tracking_db),
+                "--site",
+                "591",
+            ],
+        )
+        assert result.exit_code == 0
+        assert "591:1" in result.output
+        assert "yungching:9" not in result.output
+
+    def test_re_add_updates_nickname(self, tracking_db: Path) -> None:
+        runner.invoke(
+            app,
+            [
+                "watch",
+                "add",
+                "591",
+                "1",
+                "--tracking-db",
+                str(tracking_db),
+                "--nickname",
+                "old",
+            ],
+        )
+        result = runner.invoke(
+            app,
+            [
+                "watch",
+                "add",
+                "591",
+                "1",
+                "--tracking-db",
+                str(tracking_db),
+                "--nickname",
+                "new",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        listed = runner.invoke(
+            app, ["watch", "list", "--tracking-db", str(tracking_db)]
+        )
+        assert "new" in listed.output
+        assert "old" not in listed.output
