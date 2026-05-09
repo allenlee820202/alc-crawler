@@ -151,7 +151,11 @@ class SqliteListingRepository:
             return cur.fetchmany(batch_size)
 
         def _open_cursor() -> tuple[sqlite3.Connection, sqlite3.Cursor]:
-            conn = sqlite3.connect(self._db_path)
+            # check_same_thread=False is safe: each fetchmany runs inside an
+            # `await asyncio.to_thread(...)` which serializes access. Without
+            # this, the ThreadPoolExecutor can dispatch fetchmany to a thread
+            # other than the one that opened the connection -> ProgrammingError.
+            conn = sqlite3.connect(self._db_path, check_same_thread=False)
             cur = conn.execute(
                 "SELECT site, external_id, title, url, "
                 "price_amount, price_currency, "
