@@ -288,3 +288,39 @@ class TestBoundarySnapshots:
         )
         rows = repo.latest_snapshot_on_or_before(date(2026, 5, 5))
         assert len(rows) == 1
+
+
+class TestSnapshotsOnDate:
+    def test_returns_only_that_date(self, repo: DuckDbSnapshotRepository) -> None:
+        repo.record_snapshots(
+            [
+                _snap(snapshot_date=date(2026, 5, 8), external_id="1"),
+                _snap(snapshot_date=date(2026, 5, 9), external_id="2"),
+                _snap(snapshot_date=date(2026, 5, 9), external_id="3"),
+                _snap(snapshot_date=date(2026, 5, 10), external_id="4"),
+            ]
+        )
+        rows = repo.snapshots_on_date(date(2026, 5, 9))
+        assert {r.listing_id.external_id for r in rows} == {"2", "3"}
+
+    def test_returns_empty_when_no_snapshots_for_date(
+        self, repo: DuckDbSnapshotRepository
+    ) -> None:
+        repo.record_snapshots(
+            [_snap(snapshot_date=date(2026, 5, 8), external_id="1")]
+        )
+        assert repo.snapshots_on_date(date(2026, 5, 9)) == []
+
+    def test_filters_by_site(self, repo: DuckDbSnapshotRepository) -> None:
+        repo.record_snapshots(
+            [
+                _snap(snapshot_date=date(2026, 5, 9), external_id="1"),
+                ListingSnapshot(
+                    snapshot_date=date(2026, 5, 9),
+                    listing_id=ListingId("rakuya", "x"),
+                    price_amount=999_000,
+                ),
+            ]
+        )
+        rows = repo.snapshots_on_date(date(2026, 5, 9), site="rakuya")
+        assert [r.listing_id.external_id for r in rows] == ["x"]

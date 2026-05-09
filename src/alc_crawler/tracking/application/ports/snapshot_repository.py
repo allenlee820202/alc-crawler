@@ -52,3 +52,8 @@ class SnapshotRepository(Protocol):
 
         Used as the "after" tip for change detection.
         """
+
+    def snapshots_on_date(
+        self, snapshot_date: date, *, site: str | None = None
+    ) -> Sequence[ListingSnapshot]:
+        """All snapshots recorded for `snapshot_date`. Optionally site-filtered."""

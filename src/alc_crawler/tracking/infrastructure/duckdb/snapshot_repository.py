@@ -141,6 +141,26 @@ class DuckDbSnapshotRepository:
             target_date, direction="before", site=site
         )
 
+    def snapshots_on_date(
+        self, snapshot_date: date, *, site: str | None = None
+    ) -> Sequence[ListingSnapshot]:
+        sql = """
+            SELECT snapshot_date, site, external_id, price_amount,
+                   area_ping, unit_price_per_ping, house_age_years,
+                   view_count, community_name, address_district, shape,
+                   source_attributes_json
+            FROM listing_snapshots
+            WHERE snapshot_date = ?
+        """
+        params: list[Any] = [snapshot_date]
+        if site is not None:
+            sql += " AND site = ?"
+            params.append(site)
+        sql += " ORDER BY site, external_id"
+        with self._connect() as conn:
+            rows = conn.execute(sql, params).fetchall()
+        return [self._row_to_snapshot(r) for r in rows]
+
     def _boundary_snapshots(
         self, pivot: date, *, direction: str, site: str | None
     ) -> Sequence[ListingSnapshot]:
