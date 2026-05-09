@@ -127,6 +127,59 @@ class DuckDbSnapshotRepository:
             ).fetchone()
         return row[0] if row and row[0] is not None else None
 
+    def earliest_snapshot_on_or_after(
+        self, anchor_date: date, *, site: str | None = None
+    ) -> Sequence[ListingSnapshot]:
+        return self._boundary_snapshots(
+            anchor_date, direction="after", site=site
+        )
+
+    def latest_snapshot_on_or_before(
+        self, target_date: date, *, site: str | None = None
+    ) -> Sequence[ListingSnapshot]:
+        return self._boundary_snapshots(
+            target_date, direction="before", site=site
+        )
+
+    def _boundary_snapshots(
+        self, pivot: date, *, direction: str, site: str | None
+    ) -> Sequence[ListingSnapshot]:
+        # ROW_NUMBER over (site, external_id) picks one row per listing:
+        # the earliest >= pivot (direction='after') or latest <= pivot (direction='before').
+        if direction == "after":
+            where_op = ">="
+            order = "ASC"
+        elif direction == "before":
+            where_op = "<="
+            order = "DESC"
+        else:  # pragma: no cover — defensive
+            raise ValueError(f"unknown direction: {direction}")
+        sql = f"""
+            SELECT snapshot_date, site, external_id, price_amount,
+                   area_ping, unit_price_per_ping, house_age_years,
+                   view_count, community_name, address_district, shape,
+                   source_attributes_json
+            FROM (
+                SELECT *,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY site, external_id
+                           ORDER BY snapshot_date {order}
+                       ) AS rn
+                FROM listing_snapshots
+                WHERE snapshot_date {where_op} ?
+            ) WHERE rn = 1
+        """
+        params: list[Any] = [pivot]
+        if site is not None:
+            sql = sql.replace(
+                f"WHERE snapshot_date {where_op} ?",
+                f"WHERE snapshot_date {where_op} ? AND site = ?",
+            )
+            params.append(site)
+        with self._connect() as conn:
+            rows = conn.execute(sql, params).fetchall()
+        return [self._row_to_snapshot(r) for r in rows]
+
     @staticmethod
     def _snapshot_to_row(s: ListingSnapshot) -> tuple[Any, ...]:
         return (

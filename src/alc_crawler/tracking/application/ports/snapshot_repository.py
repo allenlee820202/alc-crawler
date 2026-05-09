@@ -35,3 +35,20 @@ class SnapshotRepository(Protocol):
 
     def latest_snapshot_date(self, *, site: str) -> date | None:
         """Most recent snapshot_date stored for `site`, or None if empty."""
+
+    def earliest_snapshot_on_or_after(
+        self, anchor_date: date, *, site: str | None = None
+    ) -> Sequence[ListingSnapshot]:
+        """For each listing, the earliest snapshot with date >= anchor_date.
+
+        Used as the "before" anchor for change detection: pins each listing
+        to its first appearance within the window so we compare like-for-like.
+        """
+
+    def latest_snapshot_on_or_before(
+        self, target_date: date, *, site: str | None = None
+    ) -> Sequence[ListingSnapshot]:
+        """For each listing, the latest snapshot with date <= target_date.
+
+        Used as the "after" tip for change detection.
+        """

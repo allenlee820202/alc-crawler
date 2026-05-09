@@ -202,3 +202,89 @@ class TestLatestSnapshotDate:
     def test_isolates_sites(self, repo: DuckDbSnapshotRepository) -> None:
         repo.record_snapshots([_snap(snapshot_date=date(2026, 5, 9), external_id="1")])
         assert repo.latest_snapshot_date(site="rakuya") is None
+
+
+class TestBoundarySnapshots:
+    """Tests for earliest_snapshot_on_or_after / latest_snapshot_on_or_before."""
+
+    def _populate(self, repo: DuckDbSnapshotRepository) -> None:
+        # Listing 1: three snapshots inside the window
+        # Listing 2: one snapshot before, one inside
+        # Listing 3: only outside the window (should be excluded)
+        repo.record_snapshots(
+            [
+                _snap(snapshot_date=date(2026, 5, 2), external_id="1", price_amount=1_000_000),
+                _snap(snapshot_date=date(2026, 5, 5), external_id="1", price_amount=970_000),
+                _snap(snapshot_date=date(2026, 5, 8), external_id="1", price_amount=950_000),
+                _snap(snapshot_date=date(2026, 4, 25), external_id="2", price_amount=2_000_000),
+                _snap(snapshot_date=date(2026, 5, 6), external_id="2", price_amount=1_900_000),
+                _snap(snapshot_date=date(2026, 4, 1), external_id="3", price_amount=500_000),
+            ]
+        )
+
+    def test_earliest_picks_first_in_window_per_listing(
+        self, repo: DuckDbSnapshotRepository
+    ) -> None:
+        self._populate(repo)
+        rows = repo.earliest_snapshot_on_or_after(date(2026, 5, 1))
+        by_id = {s.listing_id.external_id: s for s in rows}
+        assert set(by_id) == {"1", "2"}
+        assert by_id["1"].snapshot_date == date(2026, 5, 2)
+        assert by_id["1"].price_amount == 1_000_000
+        assert by_id["2"].snapshot_date == date(2026, 5, 6)
+
+    def test_latest_picks_last_in_window_per_listing(
+        self, repo: DuckDbSnapshotRepository
+    ) -> None:
+        self._populate(repo)
+        rows = repo.latest_snapshot_on_or_before(date(2026, 5, 9))
+        by_id = {s.listing_id.external_id: s for s in rows}
+        # Listing 3's only snapshot (April 1) is also <= May 9, so it appears here.
+        assert set(by_id) == {"1", "2", "3"}
+        assert by_id["1"].snapshot_date == date(2026, 5, 8)
+        assert by_id["1"].price_amount == 950_000
+        assert by_id["2"].snapshot_date == date(2026, 5, 6)
+
+    def test_boundary_methods_filter_by_site(
+        self, repo: DuckDbSnapshotRepository
+    ) -> None:
+        self._populate(repo)
+        # Add a rakuya snapshot to verify isolation
+        rakuya = ListingSnapshot(
+            snapshot_date=date(2026, 5, 5),
+            listing_id=ListingId("rakuya", "x"),
+            price_amount=999_000,
+        )
+        repo.record_snapshots([rakuya])
+        rows_591 = repo.earliest_snapshot_on_or_after(
+            date(2026, 5, 1), site="591"
+        )
+        assert all(s.listing_id.site == "591" for s in rows_591)
+        rows_rakuya = repo.earliest_snapshot_on_or_after(
+            date(2026, 5, 1), site="rakuya"
+        )
+        assert [s.listing_id.external_id for s in rows_rakuya] == ["x"]
+
+    def test_boundary_methods_return_empty_when_no_data(
+        self, repo: DuckDbSnapshotRepository
+    ) -> None:
+        assert list(repo.earliest_snapshot_on_or_after(date(2026, 5, 1))) == []
+        assert list(repo.latest_snapshot_on_or_before(date(2026, 5, 9))) == []
+
+    def test_pivot_date_is_inclusive_for_after(
+        self, repo: DuckDbSnapshotRepository
+    ) -> None:
+        repo.record_snapshots(
+            [_snap(snapshot_date=date(2026, 5, 5), external_id="1")]
+        )
+        rows = repo.earliest_snapshot_on_or_after(date(2026, 5, 5))
+        assert len(rows) == 1
+
+    def test_pivot_date_is_inclusive_for_before(
+        self, repo: DuckDbSnapshotRepository
+    ) -> None:
+        repo.record_snapshots(
+            [_snap(snapshot_date=date(2026, 5, 5), external_id="1")]
+        )
+        rows = repo.latest_snapshot_on_or_before(date(2026, 5, 5))
+        assert len(rows) == 1
