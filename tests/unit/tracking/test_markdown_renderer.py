@@ -9,6 +9,8 @@ from alc_crawler.tracking.domain.lifecycle import LifecycleStatus
 from alc_crawler.tracking.domain.price_change import PriceChange
 from alc_crawler.tracking.domain.watch_report import WatchReportEntry
 from alc_crawler.tracking.interfaces.reports.markdown import (
+    filter_delisted,
+    render_delisted_watched,
     render_market_summary,
     render_price_changes,
     render_watch_report,
@@ -250,4 +252,64 @@ class TestRenderWatchReport:
 
     def test_site_suffix(self) -> None:
         out = render_watch_report([], today=date(2026, 5, 9), site="591")
+        assert "(site=591)" in out
+
+
+class TestFilterDelisted:
+    def test_keeps_only_off_sale(self) -> None:
+        on_sale = _entry(
+            listing_id=ListingId("591", "1"),
+            status=LifecycleStatus.ON_SALE,
+        )
+        stale = _entry(
+            listing_id=ListingId("591", "2"), status=LifecycleStatus.STALE
+        )
+        off_sale = _entry(
+            listing_id=ListingId("591", "3"),
+            status=LifecycleStatus.OFF_SALE,
+        )
+        result = filter_delisted([on_sale, stale, off_sale])
+        assert len(result) == 1
+        assert result[0].listing_id == ListingId("591", "3")
+
+    def test_excludes_entries_with_no_snapshots(self) -> None:
+        no_snaps = _entry(
+            snapshots=0,
+            first_seen=None,
+            last_seen=None,
+            first_price=None,
+            latest_price=None,
+            min_price=None,
+            max_price=None,
+            status=None,
+        )
+        assert filter_delisted([no_snaps]) == []
+
+
+class TestRenderDelistedWatched:
+    def test_renders_header_with_today(self) -> None:
+        out = render_delisted_watched([], today=date(2026, 5, 9))
+        assert "## Delisted watched listings" in out
+        assert "2026-05-09" in out
+
+    def test_empty_message(self) -> None:
+        out = render_delisted_watched([], today=date(2026, 5, 9))
+        assert "_No delisted watched listings._" in out
+        assert "|" not in out
+
+    def test_renders_one_row_per_entry(self) -> None:
+        e = _entry(
+            listing_id=ListingId("591", "9"),
+            nickname="missing one",
+            last_seen=date(2026, 5, 1),
+            status=LifecycleStatus.OFF_SALE,
+        )
+        out = render_delisted_watched([e], today=date(2026, 5, 9))
+        assert "`591:9`" in out
+        assert "missing one" in out
+        assert "2026-05-01" in out
+        assert "| 8 " in out  # 8 days ago
+
+    def test_site_suffix(self) -> None:
+        out = render_delisted_watched([], today=date(2026, 5, 9), site="591")
         assert "(site=591)" in out

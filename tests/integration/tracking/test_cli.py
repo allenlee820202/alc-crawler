@@ -523,3 +523,81 @@ class TestWatchReport:
         assert "591:1" in result.output
         assert "591:2" not in result.output
         assert "591:3" not in result.output
+
+
+class TestWatchDelisted:
+    def test_empty_when_nothing_watched(
+        self, populated_tracking_db: Path
+    ) -> None:
+        result = runner.invoke(
+            app,
+            [
+                "watch-delisted",
+                "--tracking-db",
+                str(populated_tracking_db),
+                "--today",
+                "2026-05-09",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        assert "No delisted watched listings" in result.output
+
+    def test_empty_when_watched_but_recent(
+        self, populated_tracking_db: Path
+    ) -> None:
+        runner.invoke(
+            app,
+            [
+                "watch",
+                "add",
+                "591",
+                "1",
+                "--tracking-db",
+                str(populated_tracking_db),
+            ],
+        )
+        # Snapshots in populated_tracking_db are dated 2026-05-09; on the
+        # same day the listing is ON_SALE, never OFF_SALE.
+        result = runner.invoke(
+            app,
+            [
+                "watch-delisted",
+                "--tracking-db",
+                str(populated_tracking_db),
+                "--today",
+                "2026-05-09",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        assert "No delisted watched listings" in result.output
+
+    def test_lists_off_sale_when_today_is_far_future(
+        self, populated_tracking_db: Path
+    ) -> None:
+        runner.invoke(
+            app,
+            [
+                "watch",
+                "add",
+                "591",
+                "1",
+                "--tracking-db",
+                str(populated_tracking_db),
+                "--nickname",
+                "ghost",
+            ],
+        )
+        # Move today 30 days ahead so the 2026-05-09 snapshot is OFF_SALE.
+        result = runner.invoke(
+            app,
+            [
+                "watch-delisted",
+                "--tracking-db",
+                str(populated_tracking_db),
+                "--today",
+                "2026-06-09",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        assert "591:1" in result.output
+        assert "ghost" in result.output

@@ -15,6 +15,7 @@ from collections.abc import Sequence
 from datetime import date
 
 from alc_crawler.tracking.domain.district_summary import DistrictSummary
+from alc_crawler.tracking.domain.lifecycle import LifecycleStatus
 from alc_crawler.tracking.domain.price_change import PriceChange
 from alc_crawler.tracking.domain.watch_report import WatchReportEntry
 
@@ -135,5 +136,58 @@ def render_watch_report(
             f"| {_fmt_price(e.min_price)} "
             f"| {_fmt_price(e.max_price)} "
             f"| {e.snapshot_count} |"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def filter_delisted(
+    entries: Sequence[WatchReportEntry],
+) -> list[WatchReportEntry]:
+    """Return only entries marked OFF_SALE (last seen beyond stale threshold).
+
+    Used by render_delisted_watched and the watch-delisted CLI.
+    Pure filter; entries with no snapshots (lifecycle_status=None) are
+    excluded since "delisted" implies "was once seen".
+    """
+    return [
+        e for e in entries if e.lifecycle_status == LifecycleStatus.OFF_SALE
+    ]
+
+
+def render_delisted_watched(
+    entries: Sequence[WatchReportEntry],
+    *,
+    today: date,
+    site: str | None = None,
+) -> str:
+    """Render a focused list of watched listings that have been delisted.
+
+    Caller is expected to have already filtered to OFF_SALE entries
+    (use filter_delisted). We do NOT re-filter here so the renderer
+    stays a pure view of its input.
+    """
+    suffix = f" (site={site})" if site else ""
+    header = f"## Delisted watched listings — as of {today.isoformat()}{suffix}"
+    if not entries:
+        return f"{header}\n\n_No delisted watched listings._\n"
+    lines = [
+        header,
+        "",
+        "| Listing | Nickname | Last seen | Days ago | Last price | Community |",
+        "|---|---|---|---:|---:|---|",
+    ]
+    for e in entries:
+        days_ago = (
+            (today - e.last_seen_date).days
+            if e.last_seen_date is not None
+            else None
+        )
+        lines.append(
+            f"| `{e.listing_id}` "
+            f"| {e.nickname or ''} "
+            f"| {e.last_seen_date.isoformat() if e.last_seen_date else '—'} "
+            f"| {days_ago if days_ago is not None else '—'} "
+            f"| {_fmt_price(e.latest_price)} "
+            f"| {e.latest_community or ''} |"
         )
     return "\n".join(lines) + "\n"

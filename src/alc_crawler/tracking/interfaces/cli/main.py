@@ -45,6 +45,8 @@ from alc_crawler.tracking.interfaces.reports.charts import (
     render_unit_price_distribution_chart,
 )
 from alc_crawler.tracking.interfaces.reports.markdown import (
+    filter_delisted,
+    render_delisted_watched,
     render_market_summary,
     render_price_changes,
     render_watch_report,
@@ -282,6 +284,43 @@ def watch_report(
     )
     typer.echo(
         render_watch_report(entries, today=today_d, site=site), nl=False
+    )
+
+
+@app.command(name="watch-delisted")
+def watch_delisted(
+    tracking_db: Path = typer.Option(
+        ..., "--tracking-db", help="Path to tracking DuckDB."
+    ),
+    site: str | None = typer.Option(
+        None, "--site", help="Restrict to one site (e.g. '591')."
+    ),
+    today: str | None = typer.Option(
+        None,
+        "--today",
+        help="Reference date for OFF_SALE classification (YYYY-MM-DD). "
+        "Defaults to system today.",
+    ),
+) -> None:
+    """List watched listings that appear to have been delisted.
+
+    A watched listing is considered delisted if its last snapshot is
+    older than the OFF_SALE threshold (3 days by default). Use this
+    in cron to alert when a listing you're tracking disappears.
+
+    Exits 0 with the report regardless of whether anything was found.
+    """
+    today_d = _parse_date(today) if today else date.today()
+    snapshot_repo = DuckDbSnapshotRepository(tracking_db)
+    snapshot_repo.initialize()
+    watchlist_repo = _watchlist_repo(tracking_db)
+    entries = BuildWatchReport(watchlist_repo, snapshot_repo).execute(
+        today=today_d, site=site
+    )
+    delisted = filter_delisted(entries)
+    typer.echo(
+        render_delisted_watched(delisted, today=today_d, site=site),
+        nl=False,
     )
 
 
