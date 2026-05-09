@@ -202,7 +202,7 @@ class TestPriceChanges:
         )
         assert result.exit_code == 0, result.output
         assert "591:1" in result.output
-        assert "[drops only]" in result.output
+        assert "drops only" in result.output
 
     def test_empty_message_when_no_changes(
         self, populated_tracking_db: Path
@@ -220,7 +220,47 @@ class TestPriceChanges:
             ],
         )
         assert result.exit_code == 0, result.output
-        assert "no price changes" in result.output
+        assert "No price changes" in result.output
+
+    def test_plain_format_uses_legacy_table(
+        self, populated_tracking_db: Path
+    ) -> None:
+        result = runner.invoke(
+            app,
+            [
+                "price-changes",
+                "--tracking-db",
+                str(populated_tracking_db),
+                "--since",
+                "2026-05-01",
+                "--until",
+                "2026-05-09",
+                "--format",
+                "plain",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        # Plain text uses 'listing' header (no markdown pipes/backticks).
+        assert "listing" in result.output
+        assert "|" not in result.output
+
+    def test_invalid_format_rejected(
+        self, populated_tracking_db: Path
+    ) -> None:
+        result = runner.invoke(
+            app,
+            [
+                "price-changes",
+                "--tracking-db",
+                str(populated_tracking_db),
+                "--since",
+                "2026-05-01",
+                "--format",
+                "yaml",
+            ],
+        )
+        assert result.exit_code != 0
+        assert "must be 'markdown' or 'plain'" in result.output
 
 
 class TestMarketSummary:
@@ -254,7 +294,7 @@ class TestMarketSummary:
             ],
         )
         assert result.exit_code == 0, result.output
-        assert "no snapshots" in result.output
+        assert "No snapshots" in result.output
 
 
 class TestHelp:

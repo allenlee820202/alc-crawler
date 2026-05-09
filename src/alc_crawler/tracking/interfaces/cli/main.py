@@ -34,6 +34,13 @@ from alc_crawler.tracking.application.use_cases.record_daily_snapshots import (
 from alc_crawler.tracking.infrastructure.duckdb.snapshot_repository import (
     DuckDbSnapshotRepository,
 )
+from alc_crawler.tracking.interfaces.reports.charts import (
+    render_unit_price_distribution_chart,
+)
+from alc_crawler.tracking.interfaces.reports.markdown import (
+    render_market_summary,
+    render_price_changes,
+)
 
 app = typer.Typer(
     help=(
@@ -95,6 +102,11 @@ def price_changes(
     only_drops: bool = typer.Option(
         False, "--only-drops", help="Skip price rises."
     ),
+    output_format: str = typer.Option(
+        "markdown",
+        "--format",
+        help="Output format: 'markdown' (default) or 'plain'.",
+    ),
 ) -> None:
     """Print listings whose price moved between --since and --until."""
     since_d = _parse_date(since)
@@ -104,20 +116,38 @@ def price_changes(
     changes = DetectPriceChanges(repo).execute(
         since=since_d, until=until_d, site=site, only_drops=only_drops
     )
-    if not changes:
-        typer.echo("(no price changes in window)")
-        return
-    typer.echo(
-        f"# Price changes {since_d.isoformat()} -> {until_d.isoformat()}"
-        + (f" (site={site})" if site else "")
-        + (" [drops only]" if only_drops else "")
-    )
-    typer.echo(f"{'listing':<24} {'from':>14} {'to':>14} {'delta':>14} {'pct':>8}")
-    for c in changes:
+    if output_format == "markdown":
         typer.echo(
-            f"{c.listing_id!s:<24} "
-            f"{c.from_amount:>14,} {c.to_amount:>14,} "
-            f"{c.delta_amount:>+14,} {c.delta_pct:>+7.2f}%"
+            render_price_changes(
+                changes,
+                since=since_d,
+                until=until_d,
+                site=site,
+                only_drops=only_drops,
+            ),
+            nl=False,
+        )
+    elif output_format == "plain":
+        if not changes:
+            typer.echo("(no price changes in window)")
+            return
+        typer.echo(
+            f"# Price changes {since_d.isoformat()} -> {until_d.isoformat()}"
+            + (f" (site={site})" if site else "")
+            + (" [drops only]" if only_drops else "")
+        )
+        typer.echo(
+            f"{'listing':<24} {'from':>14} {'to':>14} {'delta':>14} {'pct':>8}"
+        )
+        for c in changes:
+            typer.echo(
+                f"{c.listing_id!s:<24} "
+                f"{c.from_amount:>14,} {c.to_amount:>14,} "
+                f"{c.delta_amount:>+14,} {c.delta_pct:>+7.2f}%"
+            )
+    else:
+        raise typer.BadParameter(
+            f"--format must be 'markdown' or 'plain', got: {output_format!r}"
         )
 
 
@@ -132,32 +162,77 @@ def market_summary(
     site: str | None = typer.Option(
         None, "--site", help="Restrict to one site (e.g. '591')."
     ),
+    output_format: str = typer.Option(
+        "markdown",
+        "--format",
+        help="Output format: 'markdown' (default) or 'plain'.",
+    ),
+    chart: Path | None = typer.Option(
+        None,
+        "--chart",
+        help="Optional PNG path to write a unit-price distribution chart.",
+    ),
 ) -> None:
     """Print per-district aggregate stats for one snapshot day."""
     target = _parse_date(snapshot_date) if snapshot_date else date.today()
     repo = DuckDbSnapshotRepository(tracking_db)
     repo.initialize()
     summaries = BuildMarketSummary(repo).execute(target, site=site)
-    if not summaries:
-        typer.echo(f"(no snapshots on {target.isoformat()})")
-        return
-    typer.echo(
-        f"# Market summary {target.isoformat()}"
-        + (f" (site={site})" if site else "")
-    )
-    typer.echo(
-        f"{'district':<12} {'count':>6} {'median_price':>14} "
-        f"{'med_unit':>10} {'p25_unit':>10} {'p75_unit':>10}"
-    )
-    for s in summaries:
-        med_p = f"{int(s.median_price_amount):,}" if s.median_price_amount else "-"
-        med_u = f"{s.median_unit_price_per_ping:.1f}" if s.median_unit_price_per_ping else "-"
-        p25 = f"{s.p25_unit_price_per_ping:.1f}" if s.p25_unit_price_per_ping else "-"
-        p75 = f"{s.p75_unit_price_per_ping:.1f}" if s.p75_unit_price_per_ping else "-"
+    if output_format == "markdown":
         typer.echo(
-            f"{s.district:<12} {s.listing_count:>6} {med_p:>14} "
-            f"{med_u:>10} {p25:>10} {p75:>10}"
+            render_market_summary(summaries, snapshot_date=target, site=site),
+            nl=False,
         )
+    elif output_format == "plain":
+        if not summaries:
+            typer.echo(f"(no snapshots on {target.isoformat()})")
+        else:
+            typer.echo(
+                f"# Market summary {target.isoformat()}"
+                + (f" (site={site})" if site else "")
+            )
+            typer.echo(
+                f"{'district':<12} {'count':>6} {'median_price':>14} "
+                f"{'med_unit':>10} {'p25_unit':>10} {'p75_unit':>10}"
+            )
+            for s in summaries:
+                med_p = (
+                    f"{int(s.median_price_amount):,}"
+                    if s.median_price_amount
+                    else "-"
+                )
+                med_u = (
+                    f"{s.median_unit_price_per_ping:.1f}"
+                    if s.median_unit_price_per_ping
+                    else "-"
+                )
+                p25 = (
+                    f"{s.p25_unit_price_per_ping:.1f}"
+                    if s.p25_unit_price_per_ping
+                    else "-"
+                )
+                p75 = (
+                    f"{s.p75_unit_price_per_ping:.1f}"
+                    if s.p75_unit_price_per_ping
+                    else "-"
+                )
+                typer.echo(
+                    f"{s.district:<12} {s.listing_count:>6} {med_p:>14} "
+                    f"{med_u:>10} {p25:>10} {p75:>10}"
+                )
+    else:
+        raise typer.BadParameter(
+            f"--format must be 'markdown' or 'plain', got: {output_format!r}"
+        )
+    if chart is not None:
+        chart.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            render_unit_price_distribution_chart(
+                summaries, chart, snapshot_date=target
+            )
+            typer.echo(f"Chart written to {chart}", err=True)
+        except ValueError as exc:
+            typer.echo(f"Chart skipped: {exc}", err=True)
 
 
 def _parse_date(raw: str) -> date:
