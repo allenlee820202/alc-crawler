@@ -26,6 +26,9 @@ from alc_crawler.infrastructure.persistence.sqlite.listing_repository import (
 from alc_crawler.tracking.application.use_cases.build_market_summary import (
     BuildMarketSummary,
 )
+from alc_crawler.tracking.application.use_cases.build_watch_report import (
+    BuildWatchReport,
+)
 from alc_crawler.tracking.application.use_cases.detect_price_changes import (
     DetectPriceChanges,
 )
@@ -44,6 +47,7 @@ from alc_crawler.tracking.interfaces.reports.charts import (
 from alc_crawler.tracking.interfaces.reports.markdown import (
     render_market_summary,
     render_price_changes,
+    render_watch_report,
 )
 
 app = typer.Typer(
@@ -246,6 +250,39 @@ def _parse_date(raw: str) -> date:
         raise typer.BadParameter(
             f"date must be ISO format (YYYY-MM-DD), got: {raw!r}"
         ) from exc
+
+
+@app.command(name="watch-report")
+def watch_report(
+    tracking_db: Path = typer.Option(
+        ..., "--tracking-db", help="Path to tracking DuckDB."
+    ),
+    site: str | None = typer.Option(
+        None, "--site", help="Restrict to one site (e.g. '591')."
+    ),
+    today: str | None = typer.Option(
+        None,
+        "--today",
+        help="Reference date for lifecycle classification (YYYY-MM-DD). "
+        "Defaults to system today. Pass explicitly to make reports reproducible.",
+    ),
+) -> None:
+    """Print a per-listing summary for every watched listing.
+
+    Includes lifecycle status, days on market, first→latest price arc,
+    all-time min/max, and snapshot count. Use `watch add` to populate
+    the watchlist first.
+    """
+    today_d = _parse_date(today) if today else date.today()
+    snapshot_repo = DuckDbSnapshotRepository(tracking_db)
+    snapshot_repo.initialize()
+    watchlist_repo = _watchlist_repo(tracking_db)
+    entries = BuildWatchReport(watchlist_repo, snapshot_repo).execute(
+        today=today_d, site=site
+    )
+    typer.echo(
+        render_watch_report(entries, today=today_d, site=site), nl=False
+    )
 
 
 # --- watch sub-app ----------------------------------------------------------

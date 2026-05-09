@@ -443,3 +443,83 @@ class TestWatchCommands:
         )
         assert "new" in listed.output
         assert "old" not in listed.output
+
+
+class TestWatchReport:
+    def test_empty_watchlist_message(
+        self, populated_tracking_db: Path
+    ) -> None:
+        result = runner.invoke(
+            app,
+            [
+                "watch-report",
+                "--tracking-db",
+                str(populated_tracking_db),
+                "--today",
+                "2026-05-09",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        assert "No watched listings" in result.output
+
+    def test_renders_entry_for_watched_listing(
+        self, populated_tracking_db: Path
+    ) -> None:
+        # Add a listing that exists in the populated tracking DB.
+        runner.invoke(
+            app,
+            [
+                "watch",
+                "add",
+                "591",
+                "1",
+                "--tracking-db",
+                str(populated_tracking_db),
+                "--nickname",
+                "candidate",
+            ],
+        )
+        result = runner.invoke(
+            app,
+            [
+                "watch-report",
+                "--tracking-db",
+                str(populated_tracking_db),
+                "--today",
+                "2026-05-09",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        assert "591:1" in result.output
+        assert "candidate" in result.output
+        assert "Watch report 2026-05-09" in result.output
+
+    def test_unwatched_listings_do_not_appear(
+        self, populated_tracking_db: Path
+    ) -> None:
+        # Watch only listing 1; listings 2/3 should NOT show up.
+        runner.invoke(
+            app,
+            [
+                "watch",
+                "add",
+                "591",
+                "1",
+                "--tracking-db",
+                str(populated_tracking_db),
+            ],
+        )
+        result = runner.invoke(
+            app,
+            [
+                "watch-report",
+                "--tracking-db",
+                str(populated_tracking_db),
+                "--today",
+                "2026-05-09",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        assert "591:1" in result.output
+        assert "591:2" not in result.output
+        assert "591:3" not in result.output

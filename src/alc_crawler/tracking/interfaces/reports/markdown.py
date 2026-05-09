@@ -16,6 +16,7 @@ from datetime import date
 
 from alc_crawler.tracking.domain.district_summary import DistrictSummary
 from alc_crawler.tracking.domain.price_change import PriceChange
+from alc_crawler.tracking.domain.watch_report import WatchReportEntry
 
 
 def render_price_changes(
@@ -88,3 +89,51 @@ def _fmt_price(value: float | None) -> str:
 
 def _fmt_unit(value: float | None) -> str:
     return f"{value:.1f}" if value is not None else "—"
+
+
+def render_watch_report(
+    entries: Sequence[WatchReportEntry],
+    *,
+    today: date,
+    site: str | None = None,
+) -> str:
+    """Render the watchlist report as a markdown table.
+
+    One row per watched listing. Columns chosen for at-a-glance
+    triage: identity, lifecycle status, days_on_market, price arc
+    (first → latest with delta and %), and historical extremes.
+    """
+    suffix = f" (site={site})" if site else ""
+    header = f"## Watch report {today.isoformat()}{suffix}"
+    if not entries:
+        return f"{header}\n\n_No watched listings._\n"
+    lines = [
+        header,
+        "",
+        "| Listing | Nickname | Status | Days | First → Latest | Δ | Min | Max | Snaps |",
+        "|---|---|---|---:|---|---:|---:|---:|---:|",
+    ]
+    for e in entries:
+        first_to_latest = (
+            f"{e.first_price:,} → {e.latest_price:,}"
+            if e.first_price is not None and e.latest_price is not None
+            else "—"
+        )
+        delta_cell = (
+            f"{e.total_delta:+,} ({e.total_delta_pct:+.2f}%)"
+            if e.total_delta is not None and e.total_delta_pct is not None
+            else "—"
+        )
+        status = e.lifecycle_status.value if e.lifecycle_status else "—"
+        lines.append(
+            f"| `{e.listing_id}` "
+            f"| {e.nickname or ''} "
+            f"| {status} "
+            f"| {e.days_on_market if e.days_on_market is not None else '—'} "
+            f"| {first_to_latest} "
+            f"| {delta_cell} "
+            f"| {_fmt_price(e.min_price)} "
+            f"| {_fmt_price(e.max_price)} "
+            f"| {e.snapshot_count} |"
+        )
+    return "\n".join(lines) + "\n"

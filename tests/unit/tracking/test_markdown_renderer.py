@@ -5,10 +5,13 @@ from datetime import date
 
 from alc_crawler.domain.value_objects import ListingId
 from alc_crawler.tracking.domain.district_summary import DistrictSummary
+from alc_crawler.tracking.domain.lifecycle import LifecycleStatus
 from alc_crawler.tracking.domain.price_change import PriceChange
+from alc_crawler.tracking.domain.watch_report import WatchReportEntry
 from alc_crawler.tracking.interfaces.reports.markdown import (
     render_market_summary,
     render_price_changes,
+    render_watch_report,
 )
 
 
@@ -157,4 +160,94 @@ class TestRenderMarketSummary:
         out = render_market_summary(
             [], snapshot_date=date(2026, 5, 9), site="591"
         )
+        assert "(site=591)" in out
+
+
+def _entry(
+    *,
+    listing_id: ListingId | None = None,
+    snapshots: int = 5,
+    first_seen: date | None = date(2026, 5, 1),
+    last_seen: date | None = date(2026, 5, 9),
+    first_price: int | None = 1_000_000,
+    latest_price: int | None = 950_000,
+    min_price: int | None = 900_000,
+    max_price: int | None = 1_050_000,
+    status: LifecycleStatus | None = LifecycleStatus.ON_SALE,
+    nickname: str | None = "candidate",
+) -> WatchReportEntry:
+    days = (last_seen - first_seen).days if first_seen and last_seen else None
+    return WatchReportEntry(
+        listing_id=listing_id or ListingId("591", "1"),
+        nickname=nickname,
+        snapshot_count=snapshots,
+        first_seen_date=first_seen,
+        last_seen_date=last_seen,
+        days_on_market=days,
+        first_price=first_price,
+        latest_price=latest_price,
+        min_price=min_price,
+        min_price_date=date(2026, 5, 5) if min_price else None,
+        max_price=max_price,
+        max_price_date=date(2026, 5, 3) if max_price else None,
+        lifecycle_status=status,
+        latest_district="大安區",
+        latest_community="Block A",
+    )
+
+
+class TestRenderWatchReport:
+    def test_renders_header_with_today(self) -> None:
+        out = render_watch_report([], today=date(2026, 5, 9))
+        assert "## Watch report 2026-05-09" in out
+
+    def test_empty_message(self) -> None:
+        out = render_watch_report([], today=date(2026, 5, 9))
+        assert "_No watched listings._" in out
+        assert "|" not in out
+
+    def test_renders_one_row_per_entry(self) -> None:
+        out = render_watch_report(
+            [
+                _entry(listing_id=ListingId("591", "1"), nickname="A"),
+                _entry(listing_id=ListingId("591", "2"), nickname="B"),
+            ],
+            today=date(2026, 5, 9),
+        )
+        assert "`591:1`" in out
+        assert "`591:2`" in out
+        assert "| A " in out
+        assert "| B " in out
+
+    def test_includes_lifecycle_status(self) -> None:
+        out = render_watch_report(
+            [_entry(status=LifecycleStatus.STALE)],
+            today=date(2026, 5, 9),
+        )
+        assert "stale" in out
+
+    def test_em_dash_for_no_snapshots(self) -> None:
+        e = _entry(
+            snapshots=0,
+            first_seen=None,
+            last_seen=None,
+            first_price=None,
+            latest_price=None,
+            min_price=None,
+            max_price=None,
+            status=None,
+        )
+        out = render_watch_report([e], today=date(2026, 5, 9))
+        assert out.count("—") >= 4
+
+    def test_renders_signed_delta_and_percent(self) -> None:
+        out = render_watch_report(
+            [_entry(first_price=1_000_000, latest_price=950_000)],
+            today=date(2026, 5, 9),
+        )
+        assert "-50,000" in out
+        assert "-5.00%" in out
+
+    def test_site_suffix(self) -> None:
+        out = render_watch_report([], today=date(2026, 5, 9), site="591")
         assert "(site=591)" in out
