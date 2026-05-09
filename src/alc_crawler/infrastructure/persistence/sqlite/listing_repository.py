@@ -12,8 +12,10 @@ from __future__ import annotations
 import asyncio
 import json
 import sqlite3
+from collections.abc import AsyncIterator
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from alc_crawler.domain.canonical_listing import CanonicalListing
 from alc_crawler.domain.value_objects import Address, ListingId, Price
@@ -122,7 +124,7 @@ class SqliteListingRepository:
     def _get_sync(self, listing_id: ListingId) -> CanonicalListing | None:
         with sqlite3.connect(self._db_path) as conn:
             cur = conn.execute(
-                "SELECT title, url, price_amount, price_currency, "
+                "SELECT site, external_id, title, url, price_amount, price_currency, "
                 "address_city, address_district, address_raw, "
                 "observed_at, attributes_json, "
                 "area_ping, main_area_ping, unit_price_per_ping, "
@@ -134,7 +136,50 @@ class SqliteListingRepository:
             row = cur.fetchone()
         if row is None:
             return None
+        return self._row_to_listing(row)
+
+    async def iter_all(self, *, batch_size: int = 500) -> AsyncIterator[CanonicalListing]:
+        """Stream every listing.
+
+        Fetches in `batch_size` chunks via `asyncio.to_thread` so we
+        never load the full table into memory and never block the loop
+        for more than one batch. The cursor lives in a worker thread
+        for the duration of the iteration.
+        """
+
+        def _fetch_batch(cur: sqlite3.Cursor) -> list[tuple[Any, ...]]:
+            return cur.fetchmany(batch_size)
+
+        def _open_cursor() -> tuple[sqlite3.Connection, sqlite3.Cursor]:
+            conn = sqlite3.connect(self._db_path)
+            cur = conn.execute(
+                "SELECT site, external_id, title, url, "
+                "price_amount, price_currency, "
+                "address_city, address_district, address_raw, "
+                "observed_at, attributes_json, "
+                "area_ping, main_area_ping, unit_price_per_ping, "
+                "house_age_years, room_layout, floor, "
+                "community_name, posted_at, view_count "
+                "FROM listings ORDER BY site, external_id"
+            )
+            return conn, cur
+
+        conn, cur = await asyncio.to_thread(_open_cursor)
+        try:
+            while True:
+                rows = await asyncio.to_thread(_fetch_batch, cur)
+                if not rows:
+                    return
+                for row in rows:
+                    yield self._row_to_listing(row)
+        finally:
+            await asyncio.to_thread(conn.close)
+
+    @staticmethod
+    def _row_to_listing(row: tuple[Any, ...]) -> CanonicalListing:
         (
+            site,
+            external_id,
             title,
             url,
             price_amount,
@@ -155,7 +200,7 @@ class SqliteListingRepository:
             view_count,
         ) = row
         return CanonicalListing(
-            id=listing_id,
+            id=ListingId(site, external_id),
             title=title,
             url=url,
             price=Price(amount=price_amount, currency=price_currency),

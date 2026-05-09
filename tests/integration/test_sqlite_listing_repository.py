@@ -121,3 +121,54 @@ async def test_first_class_optional_fields_default_to_none(db_path: Path) -> Non
     assert loaded is not None
     assert loaded.area_ping is None
     assert loaded.posted_at is None
+
+
+async def test_iter_all_yields_all_persisted_listings(db_path: Path) -> None:
+    repo = SqliteListingRepository(db_path)
+    await repo.initialize()
+    for i in range(5):
+        await repo.upsert(_listing(str(i), title=f"t{i}"))
+
+    seen = [listing async for listing in repo.iter_all()]
+    assert {listing.id.external_id for listing in seen} == {"0", "1", "2", "3", "4"}
+
+
+async def test_iter_all_yields_nothing_when_empty(db_path: Path) -> None:
+    repo = SqliteListingRepository(db_path)
+    await repo.initialize()
+    seen = [listing async for listing in repo.iter_all()]
+    assert seen == []
+
+
+async def test_iter_all_streams_in_batches_correctly(db_path: Path) -> None:
+    """Spans the batch boundary; ensures fetchmany loop terminates and yields all rows."""
+    repo = SqliteListingRepository(db_path)
+    await repo.initialize()
+    for i in range(13):
+        await repo.upsert(_listing(str(i)))
+    seen = [listing async for listing in repo.iter_all(batch_size=5)]
+    assert len(seen) == 13
+
+
+async def test_iter_all_round_trips_a_rich_listing(db_path: Path) -> None:
+    repo = SqliteListingRepository(db_path)
+    await repo.initialize()
+    posted = datetime(2025, 11, 18, tzinfo=UTC)
+    rich = CanonicalListing(
+        id=ListingId("591", "rich"),
+        title="rich",
+        url="https://example.com/rich",
+        price=Price(36_680_000, "TWD"),
+        address=Address(city="台北市", district="文山區", raw="文山區樟新街"),
+        observed_at=datetime(2026, 4, 18, tzinfo=UTC),
+        area_ping=81.39,
+        unit_price_per_ping=45.07,
+        house_age_years=34,
+        community_name="正翔翠庭",
+        posted_at=posted,
+        view_count=616,
+        attributes={"shape": "電梯大樓"},
+    )
+    await repo.upsert(rich)
+    seen = [listing async for listing in repo.iter_all()]
+    assert seen == [rich]
