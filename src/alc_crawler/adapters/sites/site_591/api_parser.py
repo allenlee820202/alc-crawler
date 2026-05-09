@@ -2,11 +2,11 @@
 
 The live 591 site is a Vue/Nuxt SPA; listings are loaded by the browser
 via XHR to https://bff-house.591.com.tw/v1/web/sale/list. This parser
-consumes that JSON directly and converts each item into a domain Listing.
+consumes that JSON directly and converts each item into a domain CanonicalListing.
 
 Field strategy:
 - Fields useful for downstream filtering/sorting (area, price-per-ping,
-  age, posted_at, view_count, community) become first-class on Listing.
+  age, posted_at, view_count, community) become first-class on CanonicalListing.
 - Presentational extras (agent name, photo count, has_video, raw kind/shape,
   conditionids) are kept in `attributes` to avoid schema churn.
 """
@@ -16,7 +16,7 @@ import json
 from datetime import UTC, datetime
 from typing import Any
 
-from alc_crawler.domain.listing import Listing
+from alc_crawler.domain.canonical_listing import CanonicalListing
 from alc_crawler.domain.value_objects import Address, ListingId, Price
 
 _SITE = "591"
@@ -24,7 +24,7 @@ _DETAIL_URL = "https://sale.591.com.tw/home/house/detail/2/{house_id}.html"
 
 
 class Site591ApiParser:
-    def parse(self, body: str, *, source_url: str) -> list[Listing]:
+    def parse(self, body: str, *, source_url: str) -> list[CanonicalListing]:
         del source_url  # unused; kept for SearchPageParser protocol compatibility
         try:
             data = json.loads(body)
@@ -35,14 +35,14 @@ class Site591ApiParser:
             raise ValueError(f"591 API returned non-success status: {data.get('status')!r}")
 
         items = (data.get("data") or {}).get("house_list") or []
-        listings: list[Listing] = []
+        listings: list[CanonicalListing] = []
         for item in items:
             listing = self._parse_item(item)
             if listing is not None:
                 listings.append(listing)
         return listings
 
-    def _parse_item(self, item: dict[str, Any]) -> Listing | None:
+    def _parse_item(self, item: dict[str, Any]) -> CanonicalListing | None:
         house_id = item.get("houseid")
         title = (item.get("title") or "").strip()
         region = (item.get("region_name") or "").strip()
@@ -62,7 +62,7 @@ class Site591ApiParser:
 
         external_id = str(house_id)
         try:
-            return Listing(
+            return CanonicalListing(
                 id=ListingId(_SITE, external_id),
                 title=title,
                 url=_DETAIL_URL.format(house_id=external_id),

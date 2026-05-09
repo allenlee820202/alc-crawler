@@ -15,7 +15,7 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 
-from alc_crawler.domain.listing import Listing
+from alc_crawler.domain.canonical_listing import CanonicalListing
 from alc_crawler.domain.value_objects import Address, ListingId, Price
 
 _SCHEMA = """
@@ -56,10 +56,10 @@ class SqliteListingRepository:
         with sqlite3.connect(self._db_path) as conn:
             conn.executescript(_SCHEMA)
 
-    async def upsert(self, listing: Listing) -> None:
+    async def upsert(self, listing: CanonicalListing) -> None:
         await asyncio.to_thread(self._upsert_sync, listing)
 
-    def _upsert_sync(self, listing: Listing) -> None:
+    def _upsert_sync(self, listing: CanonicalListing) -> None:
         with sqlite3.connect(self._db_path) as conn:
             conn.execute(
                 """
@@ -116,10 +116,10 @@ class SqliteListingRepository:
                 ),
             )
 
-    async def get(self, listing_id: ListingId) -> Listing | None:
+    async def get(self, listing_id: ListingId) -> CanonicalListing | None:
         return await asyncio.to_thread(self._get_sync, listing_id)
 
-    def _get_sync(self, listing_id: ListingId) -> Listing | None:
+    def _get_sync(self, listing_id: ListingId) -> CanonicalListing | None:
         with sqlite3.connect(self._db_path) as conn:
             cur = conn.execute(
                 "SELECT title, url, price_amount, price_currency, "
@@ -154,7 +154,7 @@ class SqliteListingRepository:
             posted_at,
             view_count,
         ) = row
-        return Listing(
+        return CanonicalListing(
             id=listing_id,
             title=title,
             url=url,

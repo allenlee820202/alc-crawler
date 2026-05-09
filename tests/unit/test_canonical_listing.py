@@ -1,9 +1,9 @@
-"""Tests for the Listing aggregate."""
+"""Tests for the CanonicalListing aggregate."""
 from datetime import UTC, datetime
 
 import pytest
 
-from alc_crawler.domain.listing import Listing
+from alc_crawler.domain.canonical_listing import CanonicalListing
 from alc_crawler.domain.value_objects import Address, ListingId, Price
 
 
@@ -13,7 +13,7 @@ def _addr() -> Address:
 
 class TestListing:
     def test_create_minimal_listing(self) -> None:
-        listing = Listing(
+        listing = CanonicalListing(
             id=ListingId("591", "12345"),
             title="精美兩房",
             url="https://sale.591.com.tw/home/house/detail/2/12345.html",
@@ -25,7 +25,7 @@ class TestListing:
 
     def test_title_required(self) -> None:
         with pytest.raises(ValueError, match="title"):
-            Listing(
+            CanonicalListing(
                 id=ListingId("591", "1"),
                 title="   ",
                 url="https://x",
@@ -35,7 +35,7 @@ class TestListing:
 
     def test_url_must_be_http(self) -> None:
         with pytest.raises(ValueError, match="url"):
-            Listing(
+            CanonicalListing(
                 id=ListingId("591", "1"),
                 title="t",
                 url="ftp://x",
@@ -44,7 +44,7 @@ class TestListing:
             )
 
     def test_with_observed_at_returns_new_instance(self) -> None:
-        original = Listing(
+        original = CanonicalListing(
             id=ListingId("591", "1"),
             title="t",
             url="https://x",
@@ -57,7 +57,7 @@ class TestListing:
         assert updated.observed_at == ts
 
     def test_optional_first_class_fields_default_to_none(self) -> None:
-        listing = Listing(
+        listing = CanonicalListing(
             id=ListingId("591", "1"),
             title="t",
             url="https://x",
@@ -76,7 +76,7 @@ class TestListing:
 
     def test_first_class_fields_set_on_construction(self) -> None:
         posted = datetime(2025, 11, 18, tzinfo=UTC)
-        listing = Listing(
+        listing = CanonicalListing(
             id=ListingId("591", "20037271"),
             title="樟新街超大空間",
             url="https://sale.591.com.tw/home/house/detail/2/20037271.html",
@@ -104,7 +104,7 @@ class TestListing:
 
     def test_negative_view_count_rejected(self) -> None:
         with pytest.raises(ValueError, match="view_count"):
-            Listing(
+            CanonicalListing(
                 id=ListingId("591", "1"),
                 title="t",
                 url="https://x",
@@ -115,7 +115,7 @@ class TestListing:
 
     def test_negative_area_rejected(self) -> None:
         with pytest.raises(ValueError, match="area_ping"):
-            Listing(
+            CanonicalListing(
                 id=ListingId("591", "1"),
                 title="t",
                 url="https://x",

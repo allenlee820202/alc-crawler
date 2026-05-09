@@ -10,7 +10,7 @@ from alc_crawler.application.use_cases.crawl_search_page import (
     CrawlSearchPage,
     CrawlSearchPageCommand,
 )
-from alc_crawler.domain.listing import Listing
+from alc_crawler.domain.canonical_listing import CanonicalListing
 from alc_crawler.domain.value_objects import Address, ListingId, Price
 
 # ---------- Fakes ----------
@@ -30,9 +30,9 @@ class FakeHttpFetcher(HttpFetcher):
 
 @dataclass
 class FakeRepo(ListingRepository):
-    saved: list[Listing] = field(default_factory=list)
+    saved: list[CanonicalListing] = field(default_factory=list)
 
-    async def upsert(self, listing: Listing) -> None:
+    async def upsert(self, listing: CanonicalListing) -> None:
         # Replace by id if present, else append (mimics SQL upsert).
         for i, existing in enumerate(self.saved):
             if existing.id == listing.id:
@@ -40,15 +40,15 @@ class FakeRepo(ListingRepository):
                 return
         self.saved.append(listing)
 
-    async def get(self, listing_id: ListingId) -> Listing | None:
+    async def get(self, listing_id: ListingId) -> CanonicalListing | None:
         return next((listing for listing in self.saved if listing.id == listing_id), None)
 
 
 class StubParser(SearchPageParser):
-    def __init__(self, listings: list[Listing]) -> None:
+    def __init__(self, listings: list[CanonicalListing]) -> None:
         self._listings = listings
 
-    def parse(self, html: str, *, source_url: str) -> list[Listing]:
+    def parse(self, html: str, *, source_url: str) -> list[CanonicalListing]:
         return list(self._listings)
 
 
@@ -56,8 +56,8 @@ def _addr() -> Address:
     return Address(city="台北市", district="大安區", raw="x")
 
 
-def _listing(ext_id: str) -> Listing:
-    return Listing(
+def _listing(ext_id: str) -> CanonicalListing:
+    return CanonicalListing(
         id=ListingId("591", ext_id),
         title=f"listing-{ext_id}",
         url=f"https://example.com/{ext_id}",

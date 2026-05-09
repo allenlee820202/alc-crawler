@@ -11,7 +11,7 @@ import pytest
 from alc_crawler.adapters.sites.site_591.crawl_service import Site591CrawlService
 from alc_crawler.adapters.sites.site_591.search_urls import Site591SearchUrls
 from alc_crawler.application.ports.fetcher import FetchResult
-from alc_crawler.domain.listing import Listing
+from alc_crawler.domain.canonical_listing import CanonicalListing
 from alc_crawler.domain.value_objects import ListingId
 
 
@@ -52,12 +52,12 @@ class _FakeFetcher:
 
 class _FakeRepo:
     def __init__(self) -> None:
-        self.upserts: list[Listing] = []
+        self.upserts: list[CanonicalListing] = []
 
-    async def upsert(self, listing: Listing) -> None:
+    async def upsert(self, listing: CanonicalListing) -> None:
         self.upserts.append(listing)
 
-    async def get(self, listing_id: ListingId) -> Listing | None:
+    async def get(self, listing_id: ListingId) -> CanonicalListing | None:
         for stored in self.upserts:
             if stored.id == listing_id:
                 return stored

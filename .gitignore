@@ -17,6 +17,10 @@ build/
 *.db
 data/
 
+# Scratch / ad-hoc query output
+*.txt
+!README*.txt
+
 # OS / IDE
 .DS_Store
 .idea/

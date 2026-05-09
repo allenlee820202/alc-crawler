@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from alc_crawler.domain.listing import Listing
+from alc_crawler.domain.canonical_listing import CanonicalListing
 from alc_crawler.domain.value_objects import Address, ListingId, Price
 from alc_crawler.infrastructure.persistence.sqlite.listing_repository import (
     SqliteListingRepository,
@@ -23,7 +23,7 @@ def _seed(db_path: Path) -> None:
 
     listings = [
         # Within budget, age, district -> match for the user's query.
-        Listing(
+        CanonicalListing(
             id=ListingId("591", "match-1"),
             title="建國南路三房",
             url="https://sale.591.com.tw/home/house/detail/2/match-1.html",
@@ -37,7 +37,7 @@ def _seed(db_path: Path) -> None:
             room_layout="3房2廳2衛",
             floor="5F/12F",
         ),
-        Listing(
+        CanonicalListing(
             id=ListingId("591", "match-2"),
             title="復興南路老公寓",
             url="https://sale.591.com.tw/home/house/detail/2/match-2.html",
@@ -52,7 +52,7 @@ def _seed(db_path: Path) -> None:
             floor="3F/4F",
         ),
         # Over budget.
-        Listing(
+        CanonicalListing(
             id=ListingId("591", "too-expensive"),
             title="豪宅",
             url="https://sale.591.com.tw/home/house/detail/2/too-expensive.html",
@@ -63,7 +63,7 @@ def _seed(db_path: Path) -> None:
             house_age_years=5,
         ),
         # Too old.
-        Listing(
+        CanonicalListing(
             id=ListingId("591", "too-old"),
             title="老老公寓",
             url="https://sale.591.com.tw/home/house/detail/2/too-old.html",
@@ -74,7 +74,7 @@ def _seed(db_path: Path) -> None:
             house_age_years=45,
         ),
         # Wrong district.
-        Listing(
+        CanonicalListing(
             id=ListingId("591", "wrong-district"),
             title="信義美屋",
             url="https://sale.591.com.tw/home/house/detail/2/wrong-district.html",
@@ -85,7 +85,7 @@ def _seed(db_path: Path) -> None:
             house_age_years=10,
         ),
         # Wrong shape (透天厝).
-        Listing(
+        CanonicalListing(
             id=ListingId("591", "wrong-shape"),
             title="大安透天",
             url="https://sale.591.com.tw/home/house/detail/2/wrong-shape.html",

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from alc_crawler.domain.listing import Listing
+from alc_crawler.domain.canonical_listing import CanonicalListing
 from alc_crawler.domain.value_objects import Address, ListingId, Price
 from alc_crawler.infrastructure.persistence.sqlite.listing_repository import (
     SqliteListingRepository,
@@ -15,8 +15,8 @@ from alc_crawler.infrastructure.persistence.sqlite.listing_repository import (
 pytestmark = pytest.mark.integration
 
 
-def _listing(ext_id: str, *, title: str = "t", price: int = 1000) -> Listing:
-    return Listing(
+def _listing(ext_id: str, *, title: str = "t", price: int = 1000) -> CanonicalListing:
+    return CanonicalListing(
         id=ListingId("591", ext_id),
         title=title,
         url=f"https://example.com/{ext_id}",
@@ -80,7 +80,7 @@ async def test_first_class_optional_fields_round_trip(db_path: Path) -> None:
     await repo.initialize()
 
     posted = datetime(2025, 11, 18, tzinfo=UTC)
-    rich = Listing(
+    rich = CanonicalListing(
         id=ListingId("591", "rich"),
         title="rich",
         url="https://example.com/rich",
@@ -108,7 +108,7 @@ async def test_first_class_optional_fields_default_to_none(db_path: Path) -> Non
     repo = SqliteListingRepository(db_path)
     await repo.initialize()
 
-    minimal = Listing(
+    minimal = CanonicalListing(
         id=ListingId("591", "minimal"),
         title="minimal",
         url="https://example.com/m",
