@@ -1,7 +1,7 @@
 # alc-crawler
 
-Self-hosted crawler for Taiwan house-selling sites. Currently supports **591**
-(`Yungching` planned). Fetches search results from 591's BFF JSON API,
+Self-hosted crawler for Taiwan house-selling sites. Supports **591**,
+**Yungching (永慶房屋)**, and **hbhousing (住商不動產)**. Fetches search results,
 persists them to SQLite, and lets you query the local DB with practical
 filters (price, age, rooms, area, district, keyword, etc.).
 
@@ -29,13 +29,13 @@ uv run alc-crawler regions
 
 ## Two-step workflow
 
-1. **`crawl`** — pull search results from 591 and write them to a SQLite file.
+1. **`crawl`** — pull search results from a site and write them to a SQLite file.
 2. **`query`** — filter and sort the local SQLite file.
 
 You almost always want one DB file per crawl topic (e.g. `data/daan.sqlite`,
 `data/xinyi.sqlite`). The query CLI never touches the network.
 
-### Example: find houses near 大安國中, ≤4000萬, ≤25年, 2-3房, ≥25坪
+### Example: 591 — find houses near 大安國中, ≤4000萬, ≤25年, 2-3房, ≥25坪
 
 ```bash
 # 1) Crawl 大安區 公寓 + 電梯大樓 (10 pages ≈ 300 listings).
@@ -60,29 +60,63 @@ uv run alc-crawler query --db data/daan.sqlite \
     --title-contains 大安
 ```
 
+### Example: Yungching — 內湖區, ≤3500萬, 2-3房, ≤25年
+
+```bash
+# Yungching respects ALL filter params server-side (unlike 591).
+# No --insecure needed.
+uv run alc-crawler crawl yungching \
+    --region taipei --district 內湖區 \
+    --max-price-wan 3500 --min-rooms 2 --max-rooms 3 --max-age 25 \
+    --max-pages 5 \
+    --db data/neihu-yc.sqlite
+# -> pages=5 fetched=150 persisted=150
+```
+
+### Example: hbhousing — 內湖區, ≤3500萬, 2-3房, 大樓 (elevator)
+
+```bash
+# hbhousing uses district names (not numeric ids) and --style for building type.
+# 10 listings per page. No --insecure needed.
+uv run alc-crawler crawl hbhousing \
+    --region taipei --district 內湖區 \
+    --max-price-wan 3500 --min-rooms 2 --max-rooms 3 \
+    --style 大樓 \
+    --max-pages 10 \
+    --db data/neihu-hb.sqlite
+# -> pages=10 fetched=100 persisted=100
+```
+
 ---
 
 ## `crawl` reference
 
 ```
-alc-crawler crawl SITE --region <key> [--section ID] [--shape CSV]
-                       [--page N] [--max-pages N]
-                       [--db PATH] [--insecure]
+alc-crawler crawl SITE --region <key> [OPTIONS]
 ```
 
-| Flag | Required | Notes |
-|---|---|---|
-| `SITE` (positional) | yes | Currently only `591`. |
-| `--region` | yes | One of: `taipei`, `new-taipei`, `taoyuan`, `taichung`, `kaohsiung`. |
-| `--section` | no | District id, see table below. Omit = whole region. |
-| `--shape` | no | CSV of shape ids, see table below. Omit = all shapes. |
-| `--page` | no | Starting page (1-indexed, 30 listings/page). Default `1`. |
-| `--max-pages` | no | How many consecutive pages to fetch. Default `1`. Stops early when a page returns < 30 items. |
-| `--db` | no | SQLite path (created if missing). Default `data/listings.sqlite`. |
-| `--insecure` | no | Disable TLS verification. **Required for 591** today (see Quirks). |
+| Flag | Sites | Required | Notes |
+|---|---|---|---|
+| `SITE` (positional) | all | yes | `591`, `yungching`, or `hbhousing`. |
+| `--region` | all | yes | `taipei`, `new-taipei`, `taoyuan`, `taichung`, `kaohsiung`. |
+| `--section` | 591 | no | District id (numeric). Omit = whole region. |
+| `--shape` | 591 | no | CSV of shape ids (1=公寓, 2=電梯大樓, etc.). |
+| `--district` | yungching, hbhousing | no | District name in Chinese (e.g. `內湖區`). Repeatable. |
+| `--min-price-wan` | yungching, hbhousing | no | Minimum price in 萬. Server-side filter. |
+| `--max-price-wan` | yungching, hbhousing | no | Maximum price in 萬. Server-side filter. |
+| `--min-rooms` | yungching, hbhousing | no | Minimum room count. Server-side filter. |
+| `--max-rooms` | yungching, hbhousing | no | Maximum room count. Server-side filter. |
+| `--max-age` | yungching | no | Maximum building age in years. Server-side filter. |
+| `--style` | hbhousing | no | Building style name (e.g. `大樓`, `華廈`, `公寓`). Repeatable. |
+| `--page` | 591 | no | Starting page (1-indexed). Default `1`. |
+| `--max-pages` | all | no | Pages to fetch. Default `1`. |
+| `--db` | all | no | SQLite path (created if missing). Default `data/listings.sqlite`. |
+| `--insecure` | 591 | no | Disable TLS verification. **Required for 591** (see Quirks). |
 
 **Output line:** `pages=<N> fetched=<M> persisted=<K>` — `persisted` may be
 less than `fetched` only on parse errors.
+
+**Page sizes:** 591 = 30/page, yungching = 30/page, hbhousing = 10/page.
 
 ### Section ids (台北市, region=`taipei`)
 
@@ -169,11 +203,25 @@ Run `alc-crawler regions` for the same tables on the CLI.
 | 4 | 別墅 |
 | 8 | 店面 |
 
+### District names (for `--district`, yungching/hbhousing)
+
+Use Chinese district names with `區` suffix. Supported districts per region:
+
+| Region | Districts (partial list — not all regions cover every district) |
+|---|---|
+| `taipei` | 中正區, 大同區, 中山區, 松山區, 大安區, 萬華區, 信義區, 士林區, 北投區, 內湖區, 南港區, 文山區 |
+| `new-taipei` | 板橋區, 汐止區, 永和區, 中和區, 三重區, 新莊區, 淡水區, 新店區, 土城區, 蘆洲區, 樹林區, 林口區, ... |
+| `taoyuan` | 桃園區, 中壢區, 平鎮區, 八德區, 楊梅區, 蘆竹區, 龜山區, 龍潭區, 大溪區, 大園區 |
+| `taichung` | 中區, 東區, 南區, 西區, 北區, 北屯區, 西屯區, 南屯區, 太平區, 大里區, 豐原區 |
+| `kaohsiung` | 新興區, 前金區, 苓雅區, 鼓山區, 前鎮區, 三民區, 楠梓區, 左營區, 鳳山區, ... |
+
 ### What does NOT work as a crawl-time filter
 
-591's BFF accepts `price` and `houseage` query params but returns out-of-range
-listings anyway, so this CLI does not surface them. **Apply price and age
-filters at `query` time** — the data is already on disk.
+**591 only:** 591's BFF accepts `price` and `houseage` query params but returns
+out-of-range listings anyway, so this CLI does not surface them. **Apply price
+and age filters at `query` time** — the data is already on disk.
+
+Yungching and hbhousing respect all filter params server-side.
 
 ---
 
@@ -197,7 +245,7 @@ within that group.
 | Flag | Type | Effect |
 |---|---|---|
 | `--db` | path | SQLite file produced by `crawl`. |
-| `--site` | str | Default `591`; tags written by the crawler. |
+| `--site` | str | `591` (default), `yungching`, or `hbhousing`; matches the tag written by `crawl`. |
 | `--section-name` | repeatable str | District name (`內湖區`, `信義區`, ...). |
 | `--shape-name` | repeatable str | Shape label (`公寓`, `電梯大樓`, `透天厝`, ...). |
 | `--max-price-wan` / `--min-price-wan` | int (萬, 1萬=10,000TWD) | Total price bounds. |
@@ -270,7 +318,10 @@ src/alc_crawler/
 ├── domain/          # Listing aggregate + value objects (pure, no I/O)
 ├── application/     # Use cases + ports (Fetcher, ListingRepository)
 ├── infrastructure/  # Adapters: SQLite repo, httpx fetcher
-├── adapters/sites/  # Per-site parsers + URL builders (anti-corruption layer)
+├── adapters/sites/  # Per-site anti-corruption layers:
+│   ├── site_591/        # 591 BFF API parser + URL builder
+│   ├── site_yungching/  # Yungching AES-encrypted API parser
+│   └── site_hbhousing/  # hbhousing Nuxt3 SSR HTML parser
 ├── interfaces/cli/  # Typer CLI (`alc-crawler`)
 └── tracking/        # Time-series submodule (own domain/app/infra/cli)
     ├── domain/          # ListingSnapshot, PriceChange, DistrictSummary, ...
@@ -376,17 +427,37 @@ duckdb data/tracking.duckdb \
 
 ## Quirks
 
-- **591 TLS:** 591's TWCA intermediate cert is missing the RFC 5280 Subject
-  Key Identifier extension and is rejected by recent OpenSSL. Pass
-  `--insecure` to `crawl` to disable verification. (Curl/browsers happen to
-  accept it; Python's `ssl` does not.)
-- **591 detail pages:** Price/area on the per-listing detail HTML are
-  client-side obfuscated (`<web-component-image>` / `<web-component-obfuscate>`
-  rendered via SeaJS). The crawler uses 591's BFF list endpoint instead — it
-  returns area, unit price, age, room layout, floor, community, post time,
-  view count, etc. for every result.
-- **Filter at query time, not crawl time:** the BFF ignores `price` and
-  `houseage` constraints; crawl broadly, filter locally.
+### 591
+
+- **TLS:** 591's TWCA intermediate cert is missing the RFC 5280 Subject Key
+  Identifier extension and is rejected by recent OpenSSL. Pass `--insecure` to
+  `crawl` to disable verification. (Curl/browsers accept it; Python's `ssl`
+  does not.)
+- **Detail pages:** Price/area on per-listing detail HTML are client-side
+  obfuscated (`<web-component-image>` / `<web-component-obfuscate>` via SeaJS).
+  The crawler uses 591's BFF list endpoint instead.
+- **Filter at query time:** the BFF ignores `price` and `houseage` constraints;
+  crawl broadly, filter locally.
+
+### Yungching (永慶房屋)
+
+- **AES-encrypted responses:** Yungching's search API wraps all JSON payloads
+  in AES-256-CBC encryption (passphrase `"YungChing.Buy"`, PBKDF2 key
+  derivation). The adapter decrypts transparently — no user action needed.
+- **Server-side filters work:** Unlike 591, price/age/room filters are enforced
+  by the API. Crawl with filters to reduce bandwidth.
+
+### hbhousing (住商不動產)
+
+- **Nuxt3 SSR parsing:** hbhousing is a Nuxt3 app. Listing data is embedded in
+  the HTML as `<script type="application/json" data-nuxt-data="nuxt-app">` in
+  devalue format (index-reference JSON arrays). The adapter parses this directly
+  from the server-rendered HTML — no separate API call.
+- **Path-based filters:** Filters are encoded in the URL path (zip codes,
+  `{min}-{max}-price`, `{min}_{max}-room-pattern`, `{style}-style`). All
+  filters are respected server-side.
+- **10 items per page:** Much smaller page size than 591/yungching (30). Use
+  higher `--max-pages` for equivalent coverage.
 
 ---
 
