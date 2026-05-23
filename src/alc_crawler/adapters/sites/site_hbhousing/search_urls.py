@@ -183,7 +183,7 @@ def search_params(
 
     # Style filter: {style1}-{style2}-style
     if styles:
-        style_segment = "-".join(styles) + "-style"
+        style_segment = "-".join(quote(s, safe="") for s in styles) + "-style"
         filter_segments.append(style_segment)
 
     # Page segment: only for page > 1.

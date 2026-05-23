@@ -38,7 +38,7 @@ class TestSearchParams:
 
     def test_style_filter(self) -> None:
         result = search_params("taipei", districts=["內湖區"], styles=["大樓", "華廈"])
-        assert "大樓-華廈-style" in result.page_url
+        assert "%E5%A4%A7%E6%A8%93-%E8%8F%AF%E5%BB%88-style" in result.page_url
 
     def test_multiple_districts_join_zips(self) -> None:
         result = search_params("taipei", districts=["內湖區", "南港區"])
