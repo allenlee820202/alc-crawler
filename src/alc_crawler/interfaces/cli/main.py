@@ -18,6 +18,13 @@ from alc_crawler.adapters.sites.site_591.search_urls import (
     TAOYUAN_SECTION_IDS,
     search_urls_for_region,
 )
+from alc_crawler.adapters.sites.site_yungching.crawl_service import YungchingCrawlService
+from alc_crawler.adapters.sites.site_yungching.search_urls import (
+    DISTRICTS as YUNGCHING_DISTRICTS,
+)
+from alc_crawler.adapters.sites.site_yungching.search_urls import (
+    REGION_NAMES as YUNGCHING_REGIONS,
+)
 from alc_crawler.infrastructure.http.httpx_fetcher import HttpxFetcher
 from alc_crawler.infrastructure.persistence.sqlite.listing_repository import (
     SqliteListingRepository,
@@ -55,7 +62,9 @@ def _parse_csv_ints(raw: str | None, *, flag: str) -> list[int] | None:
 
 @app.command(name="crawl")
 def crawl(
-    site: str = typer.Argument(..., help="Site to crawl. Currently only '591' is supported."),
+    site: str = typer.Argument(
+        ..., help="Site to crawl. Supported: '591', 'yungching'."
+    ),
     region: str = typer.Option(
         ...,
         "--region",
@@ -84,6 +93,14 @@ def crawl(
             "Other cities have their own ids; check 591's UI."
         ),
     ),
+    district: list[str] = typer.Option(
+        [],
+        "--district",
+        help=(
+            "District name for Yungching (e.g. 大安區). Repeat for multiple. "
+            "Run `alc-crawler regions` to see valid district names."
+        ),
+    ),
     shape: str | None = typer.Option(
         None,
         "--shape",
@@ -91,6 +108,31 @@ def crawl(
             "Comma-separated 591 shape ids. 1=公寓 2=電梯大樓 3=透天厝 "
             "4=別墅 8=店面. Example: --shape 1,2 (公寓 OR 電梯大樓)."
         ),
+    ),
+    min_price_wan: float | None = typer.Option(
+        None,
+        "--min-price-wan",
+        help="Minimum total price in 萬 (Yungching only; 591 ignores this server-side).",
+    ),
+    max_price_wan: float | None = typer.Option(
+        None,
+        "--max-price-wan",
+        help="Maximum total price in 萬 (Yungching only; 591 ignores this server-side).",
+    ),
+    min_rooms: int | None = typer.Option(
+        None,
+        "--min-rooms",
+        help="Minimum room count (Yungching only; 591 ignores this server-side).",
+    ),
+    max_rooms: int | None = typer.Option(
+        None,
+        "--max-rooms",
+        help="Maximum room count (Yungching only; 591 ignores this server-side).",
+    ),
+    max_age: float | None = typer.Option(
+        None,
+        "--max-age",
+        help="Maximum building age in years (Yungching only; 591 ignores this server-side).",
     ),
     db: Path = typer.Option(Path("data/listings.sqlite"), "--db", help="SQLite DB path."),
     insecure: bool = typer.Option(
@@ -103,23 +145,53 @@ def crawl(
         ),
     ),
 ) -> None:
-    """Crawl 591 search pages and persist listings to a SQLite DB.
+    """Crawl search pages and persist listings to a SQLite DB.
 
     Examples:
 
-      # 大安區, 公寓+電梯大樓, first 10 pages -> ~300 listings
+      # 591: 大安區, 公寓+電梯大樓, first 10 pages
       alc-crawler crawl 591 --region taipei --section 5 --shape 1,2 \\
           --max-pages 10 --insecure --db data/daan.sqlite
 
-      # Whole 台北市 (no --section), only 透天厝, deeper crawl
-      alc-crawler crawl 591 --region taipei --shape 3 \\
-          --max-pages 30 --insecure --db data/taipei-houses.sqlite
+      # Yungching: 大安區, 2-3房, ≤4000萬, first 10 pages
+      alc-crawler crawl yungching --region taipei --district 大安區 \\
+          --min-rooms 2 --max-rooms 3 --max-price-wan 4000 \\
+          --max-pages 10 --db data/daan-yc.sqlite
 
     Output line format:  pages=<N> fetched=<M> persisted=<K>
     """
-    if site != "591":
-        raise typer.BadParameter(f"Unsupported site '{site}'. Currently only '591'.")
+    supported_sites = ("591", "yungching")
+    if site not in supported_sites:
+        raise typer.BadParameter(
+            f"Unsupported site '{site}'. Supported: {', '.join(supported_sites)}."
+        )
 
+    db.parent.mkdir(parents=True, exist_ok=True)
+
+    if site == "591":
+        _crawl_591(
+            region=region, page=page, max_pages=max_pages,
+            section=section, shape=shape, db=db, insecure=insecure,
+        )
+    else:
+        _crawl_yungching(
+            region=region, max_pages=max_pages, districts=district,
+            min_price_wan=min_price_wan, max_price_wan=max_price_wan,
+            min_rooms=min_rooms, max_rooms=max_rooms, max_age=max_age,
+            db=db,
+        )
+
+
+def _crawl_591(
+    *,
+    region: str,
+    page: int,
+    max_pages: int,
+    section: int | None,
+    shape: str | None,
+    db: Path,
+    insecure: bool,
+) -> None:
     shape_ids = _parse_csv_ints(shape, flag="--shape")
 
     def urls_for(p: int) -> object:
@@ -130,8 +202,6 @@ def crawl(
             shape_ids=shape_ids,
         )
 
-    db.parent.mkdir(parents=True, exist_ok=True)
-
     async def _run() -> None:
         repo = SqliteListingRepository(db)
         await repo.initialize()
@@ -140,6 +210,42 @@ def crawl(
             repo=repo,
         )
         result = await service.crawl_pages(urls_for, max_pages=max_pages)  # type: ignore[arg-type]
+        typer.echo(
+            f"pages={result.pages} fetched={result.fetched} persisted={result.persisted}"
+        )
+
+    asyncio.run(_run())
+
+
+def _crawl_yungching(
+    *,
+    region: str,
+    max_pages: int,
+    districts: list[str],
+    min_price_wan: float | None,
+    max_price_wan: float | None,
+    min_rooms: int | None,
+    max_rooms: int | None,
+    max_age: float | None,
+    db: Path,
+) -> None:
+    async def _run() -> None:
+        repo = SqliteListingRepository(db)
+        await repo.initialize()
+        service = YungchingCrawlService(
+            fetcher=HttpxFetcher(verify=True),
+            repo=repo,
+        )
+        result = await service.crawl_pages(
+            region,
+            max_pages=max_pages,
+            districts=districts or None,
+            min_price_wan=min_price_wan,
+            max_price_wan=max_price_wan,
+            min_rooms=min_rooms,
+            max_rooms=max_rooms,
+            max_age=max_age,
+        )
         typer.echo(
             f"pages={result.pages} fetched={result.fetched} persisted={result.persisted}"
         )
@@ -360,11 +466,15 @@ def query(
 
 @app.command(name="regions")
 def regions() -> None:
-    """List 591 region keys, 台北市 section ids, and shape ids.
+    """List region keys, section/district ids, and shape ids for all sites.
 
     Use this to discover the values you can pass to `crawl --region`,
-    `crawl --section`, and `crawl --shape`.
+    `crawl --section` (591), `crawl --district` (Yungching), and `crawl --shape`.
     """
+    typer.echo("=" * 60)
+    typer.echo("591")
+    typer.echo("=" * 60)
+    typer.echo("")
     typer.echo("Regions (--region):")
     typer.echo(f"  {'key':<12}  region_id")
     for key, rid in sorted(REGION_IDS.items(), key=lambda kv: kv[1]):
@@ -401,6 +511,25 @@ def regions() -> None:
     typer.echo(f"  {'id':>3}  類型")
     for shid, label in sorted(SHAPE_IDS.items()):
         typer.echo(f"  {shid:>3}  {label}")
+    typer.echo("")
+    typer.echo("=" * 60)
+    typer.echo("Yungching (永慶房屋)")
+    typer.echo("=" * 60)
+    typer.echo("")
+    typer.echo("Regions (--region):")
+    typer.echo(f"  {'key':<12}  縣市")
+    for key, name in sorted(YUNGCHING_REGIONS.items()):
+        typer.echo(f"  {key:<12}  {name}")
+    typer.echo("")
+    typer.echo("Districts (--district, repeat for multiple):")
+    for region_key, dists in sorted(YUNGCHING_DISTRICTS.items()):
+        county = YUNGCHING_REGIONS[region_key]
+        typer.echo(f"  {county} (--region {region_key}):")
+        for d in dists:
+            typer.echo(f"    {d}")
+        typer.echo("")
+    typer.echo("Yungching supports server-side filters:")
+    typer.echo("  --min-price-wan / --max-price-wan, --min-rooms / --max-rooms, --max-age")
 
 
 if __name__ == "__main__":
