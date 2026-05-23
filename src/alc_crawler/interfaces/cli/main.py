@@ -1,4 +1,5 @@
 """Typer CLI entry point for alc-crawler."""
+
 from __future__ import annotations
 
 import asyncio
@@ -17,6 +18,13 @@ from alc_crawler.adapters.sites.site_591.search_urls import (
     TAIPEI_SECTION_IDS,
     TAOYUAN_SECTION_IDS,
     search_urls_for_region,
+)
+from alc_crawler.adapters.sites.site_hbhousing.crawl_service import HbhousingCrawlService
+from alc_crawler.adapters.sites.site_hbhousing.search_urls import (
+    DISTRICTS as HBHOUSING_DISTRICTS,
+)
+from alc_crawler.adapters.sites.site_hbhousing.search_urls import (
+    REGION_NAMES as HBHOUSING_REGIONS,
 )
 from alc_crawler.adapters.sites.site_yungching.crawl_service import YungchingCrawlService
 from alc_crawler.adapters.sites.site_yungching.search_urls import (
@@ -63,15 +71,12 @@ def _parse_csv_ints(raw: str | None, *, flag: str) -> list[int] | None:
 @app.command(name="crawl")
 def crawl(
     site: str = typer.Argument(
-        ..., help="Site to crawl. Supported: '591', 'yungching'."
+        ..., help="Site to crawl. Supported: '591', 'yungching', 'hbhousing'."
     ),
     region: str = typer.Option(
         ...,
         "--region",
-        help=(
-            "Region key. Supported: taipei, new-taipei, taoyuan, taichung, "
-            "kaohsiung."
-        ),
+        help=("Region key. Supported: taipei, new-taipei, taoyuan, taichung, kaohsiung."),
     ),
     page: int = typer.Option(
         1,
@@ -134,6 +139,11 @@ def crawl(
         "--max-age",
         help="Maximum building age in years (Yungching only; 591 ignores this server-side).",
     ),
+    style: list[str] = typer.Option(
+        [],
+        "--style",
+        help=("Building style filter for hbhousing (e.g. 大樓, 華廈, 公寓). Repeat for multiple."),
+    ),
     db: Path = typer.Option(Path("data/listings.sqlite"), "--db", help="SQLite DB path."),
     insecure: bool = typer.Option(
         False,
@@ -158,9 +168,14 @@ def crawl(
           --min-rooms 2 --max-rooms 3 --max-price-wan 4000 \\
           --max-pages 10 --db data/daan-yc.sqlite
 
+      # Hbhousing: 內湖區, ≤3500萬, 2-3房, first 5 pages
+      alc-crawler crawl hbhousing --region taipei --district 內湖區 \\
+          --max-price-wan 3500 --min-rooms 2 --max-rooms 3 \\
+          --max-pages 5 --db data/neihu-hb.sqlite
+
     Output line format:  pages=<N> fetched=<M> persisted=<K>
     """
-    supported_sites = ("591", "yungching")
+    supported_sites = ("591", "yungching", "hbhousing")
     if site not in supported_sites:
         raise typer.BadParameter(
             f"Unsupported site '{site}'. Supported: {', '.join(supported_sites)}."
@@ -170,14 +185,36 @@ def crawl(
 
     if site == "591":
         _crawl_591(
-            region=region, page=page, max_pages=max_pages,
-            section=section, shape=shape, db=db, insecure=insecure,
+            region=region,
+            page=page,
+            max_pages=max_pages,
+            section=section,
+            shape=shape,
+            db=db,
+            insecure=insecure,
+        )
+    elif site == "yungching":
+        _crawl_yungching(
+            region=region,
+            max_pages=max_pages,
+            districts=district,
+            min_price_wan=min_price_wan,
+            max_price_wan=max_price_wan,
+            min_rooms=min_rooms,
+            max_rooms=max_rooms,
+            max_age=max_age,
+            db=db,
         )
     else:
-        _crawl_yungching(
-            region=region, max_pages=max_pages, districts=district,
-            min_price_wan=min_price_wan, max_price_wan=max_price_wan,
-            min_rooms=min_rooms, max_rooms=max_rooms, max_age=max_age,
+        _crawl_hbhousing(
+            region=region,
+            max_pages=max_pages,
+            districts=district,
+            min_price_wan=int(min_price_wan) if min_price_wan is not None else None,
+            max_price_wan=int(max_price_wan) if max_price_wan is not None else None,
+            min_rooms=min_rooms,
+            max_rooms=max_rooms,
+            styles=style or None,
             db=db,
         )
 
@@ -210,9 +247,7 @@ def _crawl_591(
             repo=repo,
         )
         result = await service.crawl_pages(urls_for, max_pages=max_pages)  # type: ignore[arg-type]
-        typer.echo(
-            f"pages={result.pages} fetched={result.fetched} persisted={result.persisted}"
-        )
+        typer.echo(f"pages={result.pages} fetched={result.fetched} persisted={result.persisted}")
 
     asyncio.run(_run())
 
@@ -246,9 +281,41 @@ def _crawl_yungching(
             max_rooms=max_rooms,
             max_age=max_age,
         )
-        typer.echo(
-            f"pages={result.pages} fetched={result.fetched} persisted={result.persisted}"
+        typer.echo(f"pages={result.pages} fetched={result.fetched} persisted={result.persisted}")
+
+    asyncio.run(_run())
+
+
+def _crawl_hbhousing(
+    *,
+    region: str,
+    max_pages: int,
+    districts: list[str],
+    min_price_wan: int | None,
+    max_price_wan: int | None,
+    min_rooms: int | None,
+    max_rooms: int | None,
+    styles: list[str] | None,
+    db: Path,
+) -> None:
+    async def _run() -> None:
+        repo = SqliteListingRepository(db)
+        await repo.initialize()
+        service = HbhousingCrawlService(
+            fetcher=HttpxFetcher(verify=True),
+            repo=repo,
         )
+        result = await service.crawl_pages(
+            region,
+            max_pages=max_pages,
+            districts=districts or None,
+            min_price_wan=min_price_wan,
+            max_price_wan=max_price_wan,
+            min_rooms=min_rooms,
+            max_rooms=max_rooms,
+            styles=styles,
+        )
+        typer.echo(f"pages={result.pages} fetched={result.fetched} persisted={result.persisted}")
 
     asyncio.run(_run())
 
@@ -275,12 +342,8 @@ def query(
     min_price_wan: int | None = typer.Option(
         None, "--min-price-wan", help="Minimum total price in 萬."
     ),
-    max_age: int | None = typer.Option(
-        None, "--max-age", help="Maximum 屋齡 in years."
-    ),
-    min_area: float | None = typer.Option(
-        None, "--min-area", help="Minimum total area in 坪."
-    ),
+    max_age: int | None = typer.Option(None, "--max-age", help="Maximum 屋齡 in years."),
+    min_area: float | None = typer.Option(None, "--min-area", help="Minimum total area in 坪."),
     min_rooms: int | None = typer.Option(
         None,
         "--min-rooms",
@@ -391,9 +454,7 @@ def query(
         params.append(min_area)
     if min_rooms is not None or max_rooms is not None:
         # room_layout looks like "3房2廳2衛"; require single-digit 房 prefix.
-        where.append(
-            "(room_layout IS NOT NULL AND room_layout GLOB '[0-9]房*')"
-        )
+        where.append("(room_layout IS NOT NULL AND room_layout GLOB '[0-9]房*')")
         if min_rooms is not None:
             where.append("CAST(SUBSTR(room_layout, 1, 1) AS INTEGER) >= ?")
             params.append(min_rooms)
@@ -530,6 +591,25 @@ def regions() -> None:
         typer.echo("")
     typer.echo("Yungching supports server-side filters:")
     typer.echo("  --min-price-wan / --max-price-wan, --min-rooms / --max-rooms, --max-age")
+    typer.echo("")
+    typer.echo("=" * 60)
+    typer.echo("Hbhousing (住商不動產)")
+    typer.echo("=" * 60)
+    typer.echo("")
+    typer.echo("Regions (--region):")
+    typer.echo(f"  {'key':<12}  縣市")
+    for key, name in sorted(HBHOUSING_REGIONS.items()):
+        typer.echo(f"  {key:<12}  {name}")
+    typer.echo("")
+    typer.echo("Districts (--district, repeat for multiple):")
+    for region_key, dists in sorted(HBHOUSING_DISTRICTS.items()):
+        county = HBHOUSING_REGIONS[region_key]
+        typer.echo(f"  {county} (--region {region_key}):")
+        for d in dists:
+            typer.echo(f"    {d}")
+        typer.echo("")
+    typer.echo("Hbhousing supports server-side filters:")
+    typer.echo("  --min-price-wan / --max-price-wan, --min-rooms / --max-rooms, --style")
 
 
 if __name__ == "__main__":
