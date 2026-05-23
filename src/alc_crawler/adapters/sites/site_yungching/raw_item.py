@@ -94,7 +94,7 @@ def parse_raw_items(body: str) -> list[YungchingRawItem]:
 
     data = decrypt_response_data(encrypted_data)
 
-    items_raw = data.get("li") or []
+    items_raw = data.get("list") or data.get("li") or []
 
     items: list[YungchingRawItem] = []
     for item in items_raw:
@@ -161,11 +161,18 @@ def _parse_one(item: dict[str, Any]) -> YungchingRawItem | None:
     tags_raw = item.get("tag") or []
     tags = tuple(str(t) for t in tags_raw if t)
 
-    # MRT
+    # MRT — can be list of strings or list of dicts
     mrt_raw = item.get("mrtInfos") or []
-    mrt_infos = tuple(
-        str(m.get("name", "")) for m in mrt_raw if isinstance(m, dict) and m.get("name")
-    )
+    mrt_infos: tuple[str, ...] = ()
+    if mrt_raw:
+        if isinstance(mrt_raw[0], str):
+            mrt_infos = tuple(str(m) for m in mrt_raw if m)
+        else:
+            mrt_infos = tuple(
+                str(m.get("name", ""))
+                for m in mrt_raw
+                if isinstance(m, dict) and m.get("name")
+            )
 
     # Community
     community_raw = item.get("communityInfo") or {}
